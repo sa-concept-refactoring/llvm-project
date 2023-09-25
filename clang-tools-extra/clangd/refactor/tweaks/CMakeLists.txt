@@ -30,6 +30,7 @@ add_clang_library(clangDaemonTweaks OBJECT
   SpecialMembers.cpp
   SwapIfBranches.cpp
   DoMagic.cpp
+  Test.cpp
 
   LINK_LIBS
   clangAST
