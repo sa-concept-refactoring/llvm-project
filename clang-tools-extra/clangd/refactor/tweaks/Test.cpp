@@ -52,7 +52,13 @@ bool Test::prepare(const Selection &Inputs) {
   }
 
   auto TemplateArgument = TemplateArguments[0];
-  if (TemplateArgument.getKind() != TemplateArgument.Template) {
+  if (TemplateArgument.getKind() != TemplateArgument.Type) {
+    return false;
+  }
+
+  auto TemplateArgumentType = TemplateArgument.getAsType();
+
+  if (!TemplateArgumentType->isTemplateTypeParmType()) {
     return false;
   }
 
