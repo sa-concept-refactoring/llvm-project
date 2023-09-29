@@ -11,6 +11,7 @@
 #include "support/Logger.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Stmt.h"
+#include "clang/AST/ExprConcepts.h"
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
@@ -37,11 +38,29 @@ public:
 REGISTER_TWEAK(Test)
 
 bool Test::prepare(const Selection &Inputs) {
+  const auto *Node = Inputs.ASTSelection.commonAncestor()->Parent; // TODO: Check why we need the parent
+  const auto *Expression = Node->ASTNode.get<Expr>(); // TODO: Check if we should do error handling here
+
+  const auto *ConceptSpecializationExpression = dyn_cast_or_null<ConceptSpecializationExpr>(Expression);
+  if (ConceptSpecializationExpression == nullptr) {
+    return false;
+  }
+
+  auto TemplateArguments = ConceptSpecializationExpression->getSpecializationDecl()->getTemplateArguments();
+  if (TemplateArguments.size() != 1) {
+    return false;
+  }
+
+  auto TemplateArgument = TemplateArguments[0];
+  if (TemplateArgument.getKind() != TemplateArgument.Template) {
+    return false;
+  }
+
   return true;
 }
 
 Expected<Tweak::Effect> Test::apply(const Selection &Inputs) {
-  return Effect::showMessage("Hello World!");
+  return Effect::showMessage("You clicked on a concept reference!");
 }
 
 } // namespace
