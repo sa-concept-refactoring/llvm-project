@@ -52,6 +52,22 @@ bool DoMagic::prepare(const Selection &Inputs) {
     return false;
   }
 
+  auto TemplateArguments = ConceptSpecializationExpression->getSpecializationDecl()->getTemplateArguments();
+  if (TemplateArguments.size() != 1) {
+    return false;
+  }
+
+  auto TemplateArgument = TemplateArguments[0];
+  if (TemplateArgument.getKind() != TemplateArgument.Type) {
+    return false;
+  }
+
+  auto TemplateArgumentType = TemplateArgument.getAsType();
+
+  if (!TemplateArgumentType->isTemplateTypeParmType()) {
+    return false;
+  }
+
   return true;
 }
 
