@@ -85,7 +85,20 @@ bool Test::prepare(const Selection &Inputs) {
 }
 
 Expected<Tweak::Effect> Test::apply(const Selection &Inputs) {
-  return Effect::showMessage("You clicked on a concept reference!");
+  auto &SourceManager = Inputs.AST->getSourceManager();
+
+  tooling::Replacements Replacements{};
+
+  auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString();
+  auto SourceRange = TemplateTypeParameterDeclaration->getSourceRange();
+  auto Foo = SourceManager.getFileOffset(SourceRange.getEnd()) - SourceManager.getFileOffset(SourceRange.getBegin());
+  auto Replacement = tooling::Replacement(SourceManager, SourceRange.getBegin(), Foo, ConceptName + ' ');
+
+  if (auto Err = Replacements.add(Replacement)) {
+    return Err;
+  }
+
+  return Effect::mainFileEdit(SourceManager, Replacements);
 }
 
 } // namespace
