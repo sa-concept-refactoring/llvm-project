@@ -33,6 +33,9 @@ public:
   llvm::StringLiteral kind() const override {
     return CodeAction::REFACTOR_KIND;
   }
+private:
+  const ConceptSpecializationExpr *ConceptSpecializationExpression;
+  const TemplateTypeParmDecl *TemplateTypeParameterDeclaration;
 };
 
 REGISTER_TWEAK(Test)
@@ -41,7 +44,7 @@ bool Test::prepare(const Selection &Inputs) {
   const auto *Node = Inputs.ASTSelection.commonAncestor()->Parent; // TODO: Check why we need the parent
   const auto *Expression = Node->ASTNode.get<Expr>(); // TODO: Check if we should do error handling here
 
-  const auto *ConceptSpecializationExpression = dyn_cast_or_null<ConceptSpecializationExpr>(Expression);
+  ConceptSpecializationExpression = dyn_cast_or_null<ConceptSpecializationExpr>(Expression);
   if (ConceptSpecializationExpression == nullptr) {
     return false;
   }
@@ -51,20 +54,17 @@ bool Test::prepare(const Selection &Inputs) {
     return false;
   }
 
-  auto TemplateArgument = TemplateArguments[0];
-  if (TemplateArgument.getKind() != TemplateArgument.Type) {
+  const auto *TemplateArgument = &TemplateArguments[0];
+  if (TemplateArgument->getKind() != TemplateArgument->Type) {
     return false;
   }
 
-  auto TemplateArgumentType = TemplateArgument.getAsType();
+  auto TemplateArgumentType = TemplateArgument->getAsType();
   if (!TemplateArgumentType->isTemplateTypeParmType()) {
     return false;
   }
 
   const auto *TemplateTypeParamType = TemplateArgumentType->getAs<TemplateTypeParmType>();
-
-  // Above we find the concept and the template parameter type
-  // Below we look for the template params of the function
 
   const FunctionTemplateDecl *FunctionTemplateDeclaration = nullptr;
   for (const SelectionTree::Node *N = Node->Parent; N && !FunctionTemplateDeclaration; N = N->Parent) {
@@ -76,6 +76,10 @@ bool Test::prepare(const Selection &Inputs) {
   }
 
   auto *TemplateParameter = FunctionTemplateDeclaration->getTemplateParameters()->getParam(TemplateTypeParamType->getIndex());
+  TemplateTypeParameterDeclaration = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
+  if (!TemplateTypeParameterDeclaration->wasDeclaredWithTypename()) {
+    return false;
+  }
 
   return true;
 }
