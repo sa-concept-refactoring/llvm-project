@@ -66,7 +66,7 @@ bool Test::prepare(const Selection &Inputs) {
   // Above we find the concept and the template parameter type
   // Below we look for the template params of the function
 
-  const FunctionTemplateDecl *FunctionTemplateDeclaration;
+  const FunctionTemplateDecl *FunctionTemplateDeclaration = nullptr;
   for (const SelectionTree::Node *N = Node->Parent; N && !FunctionTemplateDeclaration; N = N->Parent) {
     FunctionTemplateDeclaration = dyn_cast_or_null<FunctionTemplateDecl>(N->ASTNode.get<Decl>());
   }
