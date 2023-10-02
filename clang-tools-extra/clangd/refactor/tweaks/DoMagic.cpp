@@ -88,7 +88,7 @@ Expected<Tweak::Effect> DoMagic::apply(const Selection &Inputs) {
   if(auto Err = Result.add(tooling::Replacement(Ctx.getSourceManager(),
                                   TypeRng->getBegin(),
                                   TypeCode.size(),
-                                  TypeCode)))
+                                  std::string{})))
     return std::move(Err);
 
   return Effect::mainFileEdit(SrcMgr, std::move(Result));//->showMessage(TypeCode);
