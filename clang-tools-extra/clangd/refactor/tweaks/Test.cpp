@@ -75,6 +75,8 @@ bool Test::prepare(const Selection &Inputs) {
     return false;
   }
 
+  auto *TemplateParameter = FunctionTemplateDeclaration->getTemplateParameters()->getParam(TemplateTypeParamType->getIndex());
+
   return true;
 }
 
