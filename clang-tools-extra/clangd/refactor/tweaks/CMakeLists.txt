@@ -31,6 +31,7 @@ add_clang_library(clangDaemonTweaks OBJECT
   SwapIfBranches.cpp
   DoMagic.cpp
   Test.cpp
+  TransformConcept.cpp
 
   LINK_LIBS
   clangAST

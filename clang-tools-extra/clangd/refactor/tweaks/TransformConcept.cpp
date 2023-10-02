@@ -1,4 +1,4 @@
-//===--- DoMagic.cpp --------------------------------------*- C++-*-===//
+//===--- TransformConcept.cpp --------------------------------------*- C++-*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -23,14 +23,14 @@
 namespace clang {
 namespace clangd {
 namespace {
-/// Test tweak for Vina
-class DoMagic : public Tweak {
+/// Transforms a concept
+class TransformConcept : public Tweak {
 public:
   const char *id() const final;
 
   bool prepare(const Selection &Inputs) override;
   Expected<Effect> apply(const Selection &Inputs) override;
-  std::string title() const override { return "Do magic stuff"; }
+  std::string title() const override { return "Transform concept"; }
   llvm::StringLiteral kind() const override {
     return CodeAction::REFACTOR_KIND;
   }
@@ -40,9 +40,9 @@ private:
   const Expr *RequiresExpr = nullptr;
 };
 
-REGISTER_TWEAK(DoMagic)
+REGISTER_TWEAK(TransformConcept)
 
-bool DoMagic::prepare(const Selection &Inputs) {
+bool TransformConcept::prepare(const Selection &Inputs) {
   const auto *Node = Inputs.ASTSelection.commonAncestor()->Parent; // TODO: Check why we need the parent
   const auto *Expression = Node->ASTNode.get<Expr>(); // TODO: Check if we should do error handling here
 
@@ -85,7 +85,7 @@ bool DoMagic::prepare(const Selection &Inputs) {
   return true;
 }
 
-Expected<Tweak::Effect> DoMagic::apply(const Selection &Inputs) {
+Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   const auto *Node = Inputs.ASTSelection.commonAncestor()->Parent;
   auto &Ctx = Inputs.AST->getASTContext();
   auto &SrcMgr = Inputs.AST->getSourceManager();

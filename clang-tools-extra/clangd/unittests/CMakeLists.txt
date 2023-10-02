@@ -134,6 +134,7 @@ add_unittest(ClangdUnitTests ClangdTests
   tweaks/ShowSelectionTreeTests.cpp
   tweaks/SpecialMembersTests.cpp
   tweaks/SwapIfBranchesTests.cpp
+  tweaks/TransformConceptTests.cpp
   tweaks/TweakTesting.cpp
   tweaks/TweakTests.cpp
 
