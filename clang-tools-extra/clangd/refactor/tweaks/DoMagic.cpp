@@ -56,6 +56,7 @@ bool DoMagic::prepare(const Selection &Inputs) {
 }
 
 Expected<Tweak::Effect> DoMagic::apply(const Selection &Inputs) {
+  const auto *Node = Inputs.ASTSelection.commonAncestor()->Parent;
   auto &Ctx = Inputs.AST->getASTContext();
   auto &SrcMgr = Inputs.AST->getSourceManager();
 
@@ -74,7 +75,7 @@ Expected<Tweak::Effect> DoMagic::apply(const Selection &Inputs) {
                                   TypeCode)))
     return std::move(Err);
 
-  return Effect::mainFileEdit(SrcMgr, std::move(Result));
+  return Effect::mainFileEdit(SrcMgr, std::move(Result));//->showMessage(TypeCode);
 
   //return Effect::showMessage("I'm a concept! Magic happened!! \\(*0*)/");
 }
