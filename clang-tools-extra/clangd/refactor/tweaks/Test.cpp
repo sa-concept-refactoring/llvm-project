@@ -57,8 +57,21 @@ bool Test::prepare(const Selection &Inputs) {
   }
 
   auto TemplateArgumentType = TemplateArgument.getAsType();
-
   if (!TemplateArgumentType->isTemplateTypeParmType()) {
+    return false;
+  }
+
+  const auto *TemplateTypeParamType = TemplateArgumentType->getAs<TemplateTypeParmType>();
+
+  // Above we find the concept and the template parameter type
+  // Below we look for the template params of the function
+
+  const FunctionTemplateDecl *FunctionTemplateDeclaration;
+  for (const SelectionTree::Node *N = Node->Parent; N && !FunctionTemplateDeclaration; N = N->Parent) {
+    FunctionTemplateDeclaration = dyn_cast_or_null<FunctionTemplateDecl>(N->ASTNode.get<Decl>());
+  }
+
+  if (FunctionTemplateDeclaration == nullptr) {
     return false;
   }
 
