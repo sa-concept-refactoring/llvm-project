@@ -90,32 +90,36 @@ bool TransformConcept::prepare(const Selection &Inputs) {
 }
 
 Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
-  const auto *Node = Inputs.ASTSelection.commonAncestor()->Parent;
   auto &Ctx = Inputs.AST->getASTContext();
   auto &SrcMgr = Inputs.AST->getSourceManager();
 
+  // Replace type
   tooling::Replacements Replacements{};
 
   auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString();
-  auto SourceRange = TemplateTypeParameterDeclaration->getSourceRange();
-  auto Foo = SrcMgr.getFileOffset(SourceRange.getEnd()) - SrcMgr.getFileOffset(SourceRange.getBegin());
-  auto Replacement = tooling::Replacement(SrcMgr, SourceRange.getBegin(), Foo, ConceptName + ' ');
+  auto TypeSourceRng = TemplateTypeParameterDeclaration->getSourceRange();
+  auto Foo = SrcMgr.getFileOffset(TypeSourceRng.getEnd()) - SrcMgr.getFileOffset(TypeSourceRng.getBegin());
+  auto TypeReplacement = tooling::Replacement(Ctx.getSourceManager(),
+                                              TypeSourceRng.getBegin(),
+                                              Foo,
+                                              ConceptName + ' ');
 
-  if (auto Err = Replacements.add(Replacement)) {
+  if (auto Err = Replacements.add(TypeReplacement)) {
     return Err;
   }
 
-  auto RequiresRng = toHalfOpenFileRange(SrcMgr, Ctx.getLangOpts(),
-                                         RequiresExpr->getSourceRange());
-  auto RequiresCode = toSourceCode(SrcMgr, *RequiresRng);
-
+  // Replace requirement clause with empty string
+  auto RequiresRng = toHalfOpenFileRange(SrcMgr,Ctx.getLangOpts(),RequiresExpr->getSourceRange());
   if(!RequiresRng)
     return error("Could not obtain range of the 'requires' branch. Macros?");
 
-  if(auto Err = Replacements.add(tooling::Replacement(Ctx.getSourceManager(),
-                                                 RequiresRng->getBegin(),
-                                                 RequiresCode.size(),
-                                                 std::string{})))
+  auto RequiresCode = toSourceCode(SrcMgr, *RequiresRng);
+
+  auto RequirementReplacement = tooling::Replacement(Ctx.getSourceManager(),
+                                                     RequiresRng->getBegin(),
+                                                     RequiresCode.size(),
+                                                     std::string{});
+  if(auto Err = Replacements.add(RequirementReplacement))
     return std::move(Err);
 
   return Effect::mainFileEdit(SrcMgr, Replacements);
