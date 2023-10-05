@@ -37,6 +37,7 @@ public:
 
 private:
   const ConceptSpecializationExpr *ConceptSpecializationExpression = nullptr;
+  const TemplateTypeParmDecl *TemplateTypeParameterDeclaration;
   const Expr *RequiresExpr = nullptr;
 };
 
@@ -56,20 +57,17 @@ bool TransformConcept::prepare(const Selection &Inputs) {
     return false;
   }
 
-  auto TemplateArgument = TemplateArguments[0];
-  if (TemplateArgument.getKind() != TemplateArgument.Type) {
+  const auto *TemplateArgument = &TemplateArguments[0];
+  if (TemplateArgument->getKind() != TemplateArgument->Type) {
     return false;
   }
 
-  auto TemplateArgumentType = TemplateArgument.getAsType();
+  auto TemplateArgumentType = TemplateArgument->getAsType();
   if (!TemplateArgumentType->isTemplateTypeParmType()) {
     return false;
   }
 
   const auto *TemplateTypeParamType = TemplateArgumentType->getAs<TemplateTypeParmType>();
-
-  // Above we find the concept and the template parameter type
-  // Below we look for the template params of the function
 
   const FunctionTemplateDecl *FunctionTemplateDeclaration = nullptr;
   for (const SelectionTree::Node *N = Node->Parent; N && !FunctionTemplateDeclaration; N = N->Parent) {
@@ -77,6 +75,12 @@ bool TransformConcept::prepare(const Selection &Inputs) {
   }
 
   if (FunctionTemplateDeclaration == nullptr) {
+    return false;
+  }
+
+  auto *TemplateParameter = FunctionTemplateDeclaration->getTemplateParameters()->getParam(TemplateTypeParamType->getIndex());
+  TemplateTypeParameterDeclaration = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
+  if (!TemplateTypeParameterDeclaration->wasDeclaredWithTypename()) {
     return false;
   }
 
@@ -90,22 +94,31 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   auto &Ctx = Inputs.AST->getASTContext();
   auto &SrcMgr = Inputs.AST->getSourceManager();
 
+  tooling::Replacements Replacements{};
+
+  auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString();
+  auto SourceRange = TemplateTypeParameterDeclaration->getSourceRange();
+  auto Foo = SrcMgr.getFileOffset(SourceRange.getEnd()) - SrcMgr.getFileOffset(SourceRange.getBegin());
+  auto Replacement = tooling::Replacement(SrcMgr, SourceRange.getBegin(), Foo, ConceptName + ' ');
+
+  if (auto Err = Replacements.add(Replacement)) {
+    return Err;
+  }
+
   auto RequiresRng = toHalfOpenFileRange(SrcMgr, Ctx.getLangOpts(),
                                          RequiresExpr->getSourceRange());
+  auto RequiresCode = toSourceCode(SrcMgr, *RequiresRng);
 
   if(!RequiresRng)
     return error("Could not obtain range of the 'requires' branch. Macros?");
 
-  auto RequiresCode = toSourceCode(SrcMgr, *RequiresRng);
-
-  tooling::Replacements Result;
-  if(auto Err = Result.add(tooling::Replacement(Ctx.getSourceManager(),
+  if(auto Err = Replacements.add(tooling::Replacement(Ctx.getSourceManager(),
                                                  RequiresRng->getBegin(),
                                                  RequiresCode.size(),
                                                  std::string{})))
     return std::move(Err);
 
-  return Effect::mainFileEdit(SrcMgr, std::move(Result));//->showMessage(RequiresCode);
+  return Effect::mainFileEdit(SrcMgr, Replacements);
 }
 
 } // namespace
