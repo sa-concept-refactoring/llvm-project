@@ -107,10 +107,7 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   if (auto Err = Replacements.add(RequirementReplacement)) {
     return Err;
   }
-
-  auto Start = FunctionTemplateDeclaration->getBeginLoc();
-  auto End = FunctionTemplateDeclaration->getAsFunction()->getDefinition()->getTrailingRequiresClause()->getBeginLoc();
-
+  
   auto Foo = tooling::Replacement(Context.getSourceManager(), TypeSourceRange.getBegin(), SourceRangeSize, ConceptName + ' ');
 
   auto *AST = Inputs.AST;
