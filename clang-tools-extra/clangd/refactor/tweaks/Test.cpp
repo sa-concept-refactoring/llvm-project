@@ -34,6 +34,7 @@ public:
     return CodeAction::REFACTOR_KIND;
   }
 private:
+  // TODO: Use unique_ptr or shared_ptr
   const ConceptSpecializationExpr *ConceptSpecializationExpression;
   const TemplateTypeParmDecl *TemplateTypeParameterDeclaration;
 };
@@ -90,7 +91,11 @@ Expected<Tweak::Effect> Test::apply(const Selection &Inputs) {
   tooling::Replacements Replacements{};
 
   auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString();
+
+  // TODO: Figure this range out, it should include the type as well
+  // For example it should be 'typename T', not 'typename '
   auto SourceRange = TemplateTypeParameterDeclaration->getSourceRange();
+
   auto Foo = SourceManager.getFileOffset(SourceRange.getEnd()) - SourceManager.getFileOffset(SourceRange.getBegin());
   auto Replacement = tooling::Replacement(SourceManager, SourceRange.getBegin(), Foo, ConceptName + ' ');
 
