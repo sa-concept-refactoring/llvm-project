@@ -40,6 +40,9 @@ private:
   const TemplateTypeParmDecl *TemplateTypeParameterDeclaration = nullptr;
   const Expr *RequiresExpr = nullptr;
 
+  // TODO: Remove this
+  const FunctionTemplateDecl *FunctionTemplateDeclaration = nullptr;
+
   // TODO: Maybe don't name these 'findX'
   auto findConceptSpecialization(const SelectionTree::Node&) -> const ConceptSpecializationExpr*;
   auto findSingleTemplateTypeParameter(const ConceptSpecializationExpr&) -> const TemplateTypeParmType*;
@@ -59,7 +62,7 @@ bool TransformConcept::prepare(const Selection &Inputs) {
   const auto *TemplateTypeParamType = findSingleTemplateTypeParameter(*ConceptSpecializationExpression);
   if (!TemplateTypeParamType) return false;
 
-  const auto *FunctionTemplateDeclaration = findFunctionTemplateDeclaration(*Root);
+  FunctionTemplateDeclaration = findFunctionTemplateDeclaration(*Root);
   if (!FunctionTemplateDeclaration) return false;
 
   auto *TemplateParameter = FunctionTemplateDeclaration->getTemplateParameters()->getParam(TemplateTypeParamType->getIndex());
@@ -74,15 +77,22 @@ bool TransformConcept::prepare(const Selection &Inputs) {
 }
 
 Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
-  auto &Ctx = Inputs.AST->getASTContext();
-  auto &SrcMgr = Inputs.AST->getSourceManager();
+  auto &Context = Inputs.AST->getASTContext();
+  auto &SourceManager = Inputs.AST->getSourceManager();
 
   tooling::Replacements Replacements{};
 
+
+
+
+
   auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString();
   auto TypeSourceRange = TemplateTypeParameterDeclaration->getSourceRange();
-  auto SourceRangeSize = SrcMgr.getFileOffset(TypeSourceRange.getEnd()) - SrcMgr.getFileOffset(TypeSourceRange.getBegin());
-  auto TypeReplacement = tooling::Replacement(Ctx.getSourceManager(), TypeSourceRange.getBegin(), SourceRangeSize, ConceptName + ' ');
+  auto SourceRangeSize =
+      SourceManager.getFileOffset(TypeSourceRange.getEnd()) -
+      SourceManager.getFileOffset(TypeSourceRange.getBegin());
+  auto TypeReplacement = tooling::Replacement(
+      Context.getSourceManager(), TypeSourceRange.getBegin(), SourceRangeSize, ConceptName + ' ');
 
   if (auto Err = Replacements.add(TypeReplacement)) {
     return Err;
@@ -90,19 +100,45 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
 
   // Replace requirement clause with empty string
   // TODO: Only do this if there are no further require clauses
-  auto RequiresRng = toHalfOpenFileRange(SrcMgr, Ctx.getLangOpts(), RequiresExpr->getSourceRange());
+  auto RequiresRng = toHalfOpenFileRange(SourceManager, Context.getLangOpts(), RequiresExpr->getSourceRange());
   if (!RequiresRng) {
     return error("Could not obtain range of the 'requires' branch. Macros?");
   }
 
-  auto RequiresCode = toSourceCode(SrcMgr, *RequiresRng);
+  auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
 
-  auto RequirementReplacement = tooling::Replacement(Ctx.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
+  auto RequirementReplacement = tooling::Replacement(Context.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
   if (auto Err = Replacements.add(RequirementReplacement)) {
     return Err;
   }
 
-  return Effect::mainFileEdit(SrcMgr, Replacements);
+
+
+
+  auto Start = FunctionTemplateDeclaration->getBeginLoc();
+  auto End = FunctionTemplateDeclaration->getAsFunction()->getDefinition()->getTrailingRequiresClause()->getBeginLoc();
+
+  auto Foo = tooling::Replacement(Context.getSourceManager(), TypeSourceRange.getBegin(), SourceRangeSize, ConceptName + ' ');
+
+  auto AST = Inputs.AST;
+  auto &TokenBuffer = AST->getTokens();
+  auto &NewSourceManager = TokenBuffer.sourceManager();
+
+  for (const auto &Token : TokenBuffer.expandedTokens()) {
+    if (Token.kind() != tok::kw_requires) {
+      continue;
+    }
+
+    auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(Token));
+    auto DeletionRange = syntax::Token::range(NewSourceManager, Spelling->front(), Spelling->back()).toCharRange(NewSourceManager);
+
+//    TODO: Only do this for the range of the current function
+//    if (auto Err = Replacements.add(tooling::Replacement(NewSourceManager, DeletionRange, ""))) {
+//      return Err;
+//    }
+  }
+
+  return Effect::mainFileEdit(SourceManager, Replacements);
 }
 
 // TODO: Make this cleaner
