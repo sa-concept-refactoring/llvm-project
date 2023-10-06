@@ -82,10 +82,6 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
 
   tooling::Replacements Replacements{};
 
-
-
-
-
   auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString();
   auto TypeSourceRange = TemplateTypeParameterDeclaration->getSourceRange();
   auto SourceRangeSize =
@@ -112,15 +108,12 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
     return Err;
   }
 
-
-
-
   auto Start = FunctionTemplateDeclaration->getBeginLoc();
   auto End = FunctionTemplateDeclaration->getAsFunction()->getDefinition()->getTrailingRequiresClause()->getBeginLoc();
 
   auto Foo = tooling::Replacement(Context.getSourceManager(), TypeSourceRange.getBegin(), SourceRangeSize, ConceptName + ' ');
 
-  auto AST = Inputs.AST;
+  auto *AST = Inputs.AST;
   auto &TokenBuffer = AST->getTokens();
   auto &NewSourceManager = TokenBuffer.sourceManager();
 
