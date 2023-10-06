@@ -107,14 +107,12 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   if (auto Err = Replacements.add(RequirementReplacement)) {
     return Err;
   }
-  
-  auto Foo = tooling::Replacement(Context.getSourceManager(), TypeSourceRange.getBegin(), SourceRangeSize, ConceptName + ' ');
 
-  auto *AST = Inputs.AST;
+  auto &AST = Inputs.AST;
   auto &TokenBuffer = AST->getTokens();
   auto &NewSourceManager = TokenBuffer.sourceManager();
 
-  for (const auto &Token : TokenBuffer.expandedTokens()) {
+  for (const auto &Token : TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange())) {
     if (Token.kind() != tok::kw_requires) {
       continue;
     }
@@ -122,10 +120,9 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
     auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(Token));
     auto DeletionRange = syntax::Token::range(NewSourceManager, Spelling->front(), Spelling->back()).toCharRange(NewSourceManager);
 
-//    TODO: Only do this for the range of the current function
-//    if (auto Err = Replacements.add(tooling::Replacement(NewSourceManager, DeletionRange, ""))) {
-//      return Err;
-//    }
+    if (auto Err = Replacements.add(tooling::Replacement(NewSourceManager, DeletionRange, ""))) {
+      return Err;
+    }
   }
 
   return Effect::mainFileEdit(SourceManager, Replacements);
