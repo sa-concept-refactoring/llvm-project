@@ -43,21 +43,25 @@ private:
 
 REGISTER_TWEAK(TransformConcept)
 
+// TODO: Extract some helper methods
 bool TransformConcept::prepare(const Selection &Inputs) {
-  const auto *Node = Inputs.ASTSelection.commonAncestor()->Parent; // TODO: Check why we need the parent
-  const auto *Expression = Node->ASTNode.get<Expr>(); // TODO: Check if we should do error handling here
+  const auto &Node = Inputs.ASTSelection.commonAncestor()->Parent; // TODO: Check why we need the parent
+  const auto &Expression = Node->ASTNode.get<Expr>(); // TODO: Check if we should do error handling here
 
   ConceptSpecializationExpression = dyn_cast_or_null<ConceptSpecializationExpr>(Expression);
   if (ConceptSpecializationExpression == nullptr) {
     return false;
   }
 
+  // TODO: Check if the concept specialization is the combination of two others
+  // For example 'integral<T> && foo<t>' or 'integral<T> || foo<T>'
+
   auto TemplateArguments = ConceptSpecializationExpression->getSpecializationDecl()->getTemplateArguments();
   if (TemplateArguments.size() != 1) {
     return false;
   }
 
-  const auto *TemplateArgument = &TemplateArguments[0];
+  const auto &TemplateArgument = &TemplateArguments[0];
   if (TemplateArgument->getKind() != TemplateArgument->Type) {
     return false;
   }
@@ -67,7 +71,7 @@ bool TransformConcept::prepare(const Selection &Inputs) {
     return false;
   }
 
-  const auto *TemplateTypeParamType = TemplateArgumentType->getAs<TemplateTypeParmType>();
+  const auto &TemplateTypeParamType = TemplateArgumentType->getAs<TemplateTypeParmType>();
 
   const FunctionTemplateDecl *FunctionTemplateDeclaration = nullptr;
   for (const SelectionTree::Node *N = Node->Parent; N && !FunctionTemplateDeclaration; N = N->Parent) {
@@ -93,34 +97,30 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   auto &Ctx = Inputs.AST->getASTContext();
   auto &SrcMgr = Inputs.AST->getSourceManager();
 
-  // Replace type
   tooling::Replacements Replacements{};
 
   auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString();
-  auto TypeSourceRng = TemplateTypeParameterDeclaration->getSourceRange();
-  auto Foo = SrcMgr.getFileOffset(TypeSourceRng.getEnd()) - SrcMgr.getFileOffset(TypeSourceRng.getBegin());
-  auto TypeReplacement = tooling::Replacement(Ctx.getSourceManager(),
-                                              TypeSourceRng.getBegin(),
-                                              Foo,
-                                              ConceptName + ' ');
+  auto TypeSourceRange = TemplateTypeParameterDeclaration->getSourceRange();
+  auto SourceRangeSize = SrcMgr.getFileOffset(TypeSourceRange.getEnd()) - SrcMgr.getFileOffset(TypeSourceRange.getBegin());
+  auto TypeReplacement = tooling::Replacement(Ctx.getSourceManager(), TypeSourceRange.getBegin(), SourceRangeSize, ConceptName + ' ');
 
   if (auto Err = Replacements.add(TypeReplacement)) {
     return Err;
   }
 
   // Replace requirement clause with empty string
-  auto RequiresRng = toHalfOpenFileRange(SrcMgr,Ctx.getLangOpts(),RequiresExpr->getSourceRange());
-  if(!RequiresRng)
+  // TODO: Only do this if there are no further require clauses
+  auto RequiresRng = toHalfOpenFileRange(SrcMgr, Ctx.getLangOpts(), RequiresExpr->getSourceRange());
+  if (!RequiresRng) {
     return error("Could not obtain range of the 'requires' branch. Macros?");
+  }
 
   auto RequiresCode = toSourceCode(SrcMgr, *RequiresRng);
 
-  auto RequirementReplacement = tooling::Replacement(Ctx.getSourceManager(),
-                                                     RequiresRng->getBegin(),
-                                                     RequiresCode.size(),
-                                                     std::string{});
-  if(auto Err = Replacements.add(RequirementReplacement))
-    return std::move(Err);
+  auto RequirementReplacement = tooling::Replacement(Ctx.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
+  if (auto Err = Replacements.add(RequirementReplacement)) {
+    return Err;
+  }
 
   return Effect::mainFileEdit(SrcMgr, Replacements);
 }
