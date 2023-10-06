@@ -47,6 +47,7 @@ private:
   auto findConceptSpecialization(const SelectionTree::Node&) -> const ConceptSpecializationExpr*;
   auto findSingleTemplateTypeParameter(const ConceptSpecializationExpr&) -> const TemplateTypeParmType*;
   auto findFunctionTemplateDeclaration(const SelectionTree::Node&) -> const FunctionTemplateDecl*;
+  auto generateRequiresReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement;
 };
 
 REGISTER_TWEAK(TransformConcept)
@@ -96,15 +97,16 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
 
   // Replace requirement clause with empty string
   // TODO: Only do this if there are no further require clauses
-  auto RequiresRng = toHalfOpenFileRange(SourceManager, Context.getLangOpts(), RequiresExpr->getSourceRange());
-  if (!RequiresRng) {
-    return error("Could not obtain range of the 'requires' branch. Macros?");
-  }
-
-  auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
-
-  auto RequirementReplacement = tooling::Replacement(Context.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
-  if (auto Err = Replacements.add(RequirementReplacement)) {
+  // TODO: Remove commented code
+  //  auto RequiresRng = toHalfOpenFileRange(SourceManager, Context.getLangOpts(), RequiresExpr->getSourceRange());
+  //  if (!RequiresRng) {
+  //    return error("Could not obtain range of the 'requires' branch. Macros?");
+  //  }
+  //
+  //  auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
+  //
+  //  auto RequirementReplacement = tooling::Replacement(Context.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
+  if (auto Err = Replacements.add(generateRequiresReplacement(SourceManager, Context))) {
     return Err;
   }
 
@@ -173,6 +175,19 @@ auto clang::clangd::TransformConcept::findFunctionTemplateDeclaration(const Sele
   }
 
   return FunctionTemplateDeclaration;
+}
+
+auto clang::clangd::TransformConcept::generateRequiresReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement
+{
+  auto RequiresRng = toHalfOpenFileRange(SourceManager, Context.getLangOpts(), RequiresExpr->getSourceRange());
+  if (!RequiresRng) {
+    // TODO: Manage error
+    //return error("Could not obtain range of the 'requires' branch. Macros?");
+  }
+
+  auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
+
+  return tooling::Replacement(Context.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
 }
 
 } // namespace
