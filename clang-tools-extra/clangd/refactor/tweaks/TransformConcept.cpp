@@ -113,6 +113,27 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   auto &AST = Inputs.AST;
   auto &TokenBuffer = AST->getTokens();
   auto &NewSourceManager = TokenBuffer.sourceManager();
+  // Tried to get token with find instead of for loop
+  //  auto Tokens = TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange());
+  //  const auto *Itr = llvm::find_if(Tokens, [&](const clang::syntax::Token Symbol) {
+  //    return Symbol.kind() == tok::kw_requires;
+  //  });
+  //
+  //  if (Itr != Tokens.end()) {
+  //    size_t Idx = std::distance(Tokens.begin(), Itr);
+  //
+  //    auto Token = Tokens[Idx];
+  //    auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(Token));
+  //    auto DeletionRange =
+  //        syntax::Token::range(NewSourceManager, Spelling->front(),
+  //                             Spelling->back())
+  //            .toCharRange(NewSourceManager);
+  //
+  //    if (auto Err = Replacements.add(
+  //            tooling::Replacement(NewSourceManager, DeletionRange, ""))) {
+  //      return Err;
+  //    }
+  //  }
 
   for (const auto &Token : TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange())) {
     if (Token.kind() != tok::kw_requires) {
