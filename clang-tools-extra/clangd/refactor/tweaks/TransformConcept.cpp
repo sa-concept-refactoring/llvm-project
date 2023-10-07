@@ -36,18 +36,27 @@ public:
   }
 
 private:
+  // TODO: Investigate if we can reduce how much data we store
   const ConceptSpecializationExpr *ConceptSpecializationExpression = nullptr;
   const TemplateTypeParmDecl *TemplateTypeParameterDeclaration = nullptr;
   const Expr *RequiresExpr = nullptr;
-
-  // TODO: Remove this
   const FunctionTemplateDecl *FunctionTemplateDeclaration = nullptr;
 
-  // TODO: Maybe don't name these 'findX'
-  auto findConceptSpecialization(const SelectionTree::Node&) -> const ConceptSpecializationExpr*;
-  auto findSingleTemplateTypeParameter(const ConceptSpecializationExpr&) -> const TemplateTypeParmType*;
-  auto findFunctionTemplateDeclaration(const SelectionTree::Node&) -> const FunctionTemplateDecl*;
-  auto generateRequiresReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement;
+  auto getTemplateParameterIndexOfTemplateArgument(const TemplateArgument &TemplateArgument) -> std::optional<int>;
+  auto generateRequiresReplacement(SourceManager&, ASTContext&) -> tooling::Replacement;
+
+  template <typename T, typename NodeKind>
+  static auto findNode(const SelectionTree::Node &Root) -> const T*;
+
+  template <typename T>
+  static auto findExpression(const SelectionTree::Node &Root) -> const T* {
+    return findNode<T, Expr>(Root);
+  }
+
+  template <typename T>
+  static auto findDeclaration(const SelectionTree::Node &Root) -> const T* {
+    return findNode<T, Decl>(Root);
+  }
 };
 
 REGISTER_TWEAK(TransformConcept)
@@ -57,20 +66,26 @@ bool TransformConcept::prepare(const Selection &Inputs) {
   const auto *Root = Inputs.ASTSelection.commonAncestor();
   if (!Root) return false;
 
-  ConceptSpecializationExpression = findConceptSpecialization(*Root);
+  ConceptSpecializationExpression = findExpression<ConceptSpecializationExpr>(*Root);
   if (!ConceptSpecializationExpression) return false;
 
-  const auto *TemplateTypeParamType = findSingleTemplateTypeParameter(*ConceptSpecializationExpression);
-  if (!TemplateTypeParamType) return false;
+//  TODO: Bring this logic back, it got lost with the refactoring of the find method, maybe we need to revert the commit that introduced this todo or we add proper support for logical combinations
+//  if (Expression && Node && isa_and_nonnull<FunctionTemplateDecl>(Node->Parent->ASTNode.get<Decl>())) {
+//    return Expression;
+//  }
 
-  FunctionTemplateDeclaration = findFunctionTemplateDeclaration(*Root);
+  FunctionTemplateDeclaration = findDeclaration<FunctionTemplateDecl>(*Root);
   if (!FunctionTemplateDeclaration) return false;
 
-  auto *TemplateParameter = FunctionTemplateDeclaration->getTemplateParameters()->getParam(TemplateTypeParamType->getIndex());
-  TemplateTypeParameterDeclaration = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
-  if (!TemplateTypeParameterDeclaration->wasDeclaredWithTypename()) {
-    return false;
-  }
+  auto TemplateArguments = ConceptSpecializationExpression->getTemplateArguments();
+  if (TemplateArguments.size() != 1) return false;
+
+  auto TemplateParameterIndex = getTemplateParameterIndexOfTemplateArgument(TemplateArguments[0]);
+  if (!TemplateParameterIndex) return false;
+
+  TemplateTypeParameterDeclaration = dyn_cast_or_null<TemplateTypeParmDecl>(
+    FunctionTemplateDeclaration->getTemplateParameters()->getParam(*TemplateParameterIndex));
+  if (!TemplateTypeParameterDeclaration->wasDeclaredWithTypename()) return false;
 
   RequiresExpr = FunctionTemplateDeclaration->getAsFunction()->getTrailingRequiresClause();
 
@@ -151,54 +166,19 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   return Effect::mainFileEdit(SourceManager, Replacements);
 }
 
-// TODO: Make this cleaner
-auto clang::clangd::TransformConcept::findConceptSpecialization(const SelectionTree::Node &Root) -> const ConceptSpecializationExpr * {
-  const ConceptSpecializationExpr *Expression = nullptr;
+auto TransformConcept::getTemplateParameterIndexOfTemplateArgument(const TemplateArgument &TemplateArgument) -> std::optional<int> {
+  if (TemplateArgument.getKind() != TemplateArgument.Type) return {};
 
-  const SelectionTree::Node *Node = &Root;
-  for (; Node && !Expression; Node = Node->Parent) {
-    Expression = dyn_cast_or_null<ConceptSpecializationExpr>(Node->ASTNode.get<Expr>());
-  }
+  auto TemplateArgumentType = TemplateArgument.getAsType();
+  if (!TemplateArgumentType->isTemplateTypeParmType()) return {};
 
-  // For now we only support single concept specializations, no combined ones.
-  // TODO: Improve comment, make it more clear that we mean '&&' and '||'
-  if (Expression && Node && isa_and_nonnull<FunctionTemplateDecl>(Node->Parent->ASTNode.get<Decl>())) {
-    return Expression;
-  }
+  const auto *TemplateTypeParameterType = TemplateArgumentType->getAs<TemplateTypeParmType>();
+  if (!TemplateTypeParameterType) return {};
 
-  return nullptr;
+  return TemplateTypeParameterType->getIndex();
 }
 
-auto clang::clangd::TransformConcept::findSingleTemplateTypeParameter(const ConceptSpecializationExpr &ConceptSpecialization) -> const TemplateTypeParmType * {
-  auto TemplateArguments = ConceptSpecialization.getSpecializationDecl()->getTemplateArguments();
-  if (TemplateArguments.size() != 1) {
-    return nullptr;
-  }
-
-  const auto &TemplateArgument = &TemplateArguments[0];
-  if (TemplateArgument->getKind() != TemplateArgument->Type) {
-    return nullptr;
-  }
-
-  auto TemplateArgumentType = TemplateArgument->getAsType();
-  if (!TemplateArgumentType->isTemplateTypeParmType()) {
-    return nullptr;
-  }
-
-  return TemplateArgumentType->getAs<TemplateTypeParmType>();
-}
-
-auto clang::clangd::TransformConcept::findFunctionTemplateDeclaration(const SelectionTree::Node &Root) -> const FunctionTemplateDecl * {
-  const FunctionTemplateDecl *FunctionTemplateDeclaration = nullptr;
-
-  for (const SelectionTree::Node *N = Root.Parent; N && !FunctionTemplateDeclaration; N = N->Parent) {
-    FunctionTemplateDeclaration = dyn_cast_or_null<FunctionTemplateDecl>(N->ASTNode.get<Decl>());
-  }
-
-  return FunctionTemplateDeclaration;
-}
-
-auto clang::clangd::TransformConcept::generateRequiresReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement
+auto TransformConcept::generateRequiresReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement
 {
   auto RequiresRng = toHalfOpenFileRange(SourceManager, Context.getLangOpts(), RequiresExpr->getSourceRange());
   if (!RequiresRng) {
@@ -209,6 +189,18 @@ auto clang::clangd::TransformConcept::generateRequiresReplacement(SourceManager&
   auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
 
   return tooling::Replacement(Context.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
+}
+
+template <typename T, typename NodeKind>
+auto TransformConcept::findNode(const SelectionTree::Node &Root) -> const T * {
+  const T* Result = nullptr;
+
+  const SelectionTree::Node *Node = &Root;
+  for (; Node && !Result; Node = Node->Parent) {
+    Result = dyn_cast_or_null<T>(Node->ASTNode.get<NodeKind>());
+  }
+
+  return Result;
 }
 
 } // namespace
