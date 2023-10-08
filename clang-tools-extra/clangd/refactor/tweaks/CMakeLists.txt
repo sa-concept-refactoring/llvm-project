@@ -29,7 +29,6 @@ add_clang_library(clangDaemonTweaks OBJECT
   RemoveUsingNamespace.cpp
   SpecialMembers.cpp
   SwapIfBranches.cpp
-  DoMagic.cpp
   TransformConcept.cpp
 
   LINK_LIBS
