@@ -110,19 +110,9 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
     return Err;
   }
 
-  // Replace requirement clause with empty string
   // TODO: Only do this if there are no further require clauses
-  // TODO: Remove commented code
-  //  auto RequiresRng = toHalfOpenFileRange(SourceManager, Context.getLangOpts(), RequiresExpr->getSourceRange());
-  //  if (!RequiresRng) {
-  //    return error("Could not obtain range of the 'requires' branch. Macros?");
-  //  }
-  //
-  //  auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
-  //
-  //  auto RequirementReplacement = tooling::Replacement(Context.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
   if (auto Err = Replacements.add(generateRequiresReplacement(SourceManager, Context))) {
-    return Err;
+    return  std::move(Err);
   }
 
   auto &AST = Inputs.AST;
@@ -188,6 +178,7 @@ auto TransformConcept::generateRequiresReplacement(SourceManager& SourceManager,
 
   auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
 
+  // Replace requirement clause with empty string
   return tooling::Replacement(Context.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
 }
 
