@@ -44,6 +44,7 @@ private:
 
   auto getTemplateParameterIndexOfTemplateArgument(const TemplateArgument &TemplateArgument) -> std::optional<int>;
   auto generateRequiresReplacement(SourceManager&, ASTContext&) -> tooling::Replacement;
+  auto generateTypeReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement;
 
   template <typename T, typename NodeKind>
   static auto findNode(const SelectionTree::Node &Root) -> const T*;
@@ -98,60 +99,49 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
 
   tooling::Replacements Replacements{};
 
-  auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString();
-  auto TypeSourceRange = TemplateTypeParameterDeclaration->getSourceRange();
-  auto SourceRangeSize =
-      SourceManager.getFileOffset(TypeSourceRange.getEnd()) -
-      SourceManager.getFileOffset(TypeSourceRange.getBegin());
-  auto TypeReplacement = tooling::Replacement(
-      Context.getSourceManager(), TypeSourceRange.getBegin(), SourceRangeSize, ConceptName + ' ');
-
-  if (auto Err = Replacements.add(TypeReplacement)) {
-    return Err;
+  if (auto Err = Replacements.add(generateTypeReplacement(SourceManager, Context))) {
+    return std::move(Err);
   }
 
   // TODO: Only do this if there are no further require clauses
   if (auto Err = Replacements.add(generateRequiresReplacement(SourceManager, Context))) {
-    return  std::move(Err);
+    return std::move(Err);
   }
 
+  // TODO: Extract this to a method
   auto &AST = Inputs.AST;
   auto &TokenBuffer = AST->getTokens();
   auto &NewSourceManager = TokenBuffer.sourceManager();
-  // Tried to get token with find instead of for loop
-  //  auto Tokens = TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange());
-  //  const auto *Itr = llvm::find_if(Tokens, [&](const clang::syntax::Token Symbol) {
-  //    return Symbol.kind() == tok::kw_requires;
-  //  });
-  //
-  //  if (Itr != Tokens.end()) {
-  //    size_t Idx = std::distance(Tokens.begin(), Itr);
-  //
-  //    auto Token = Tokens[Idx];
-  //    auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(Token));
-  //    auto DeletionRange =
-  //        syntax::Token::range(NewSourceManager, Spelling->front(),
-  //                             Spelling->back())
-  //            .toCharRange(NewSourceManager);
-  //
-  //    if (auto Err = Replacements.add(
-  //            tooling::Replacement(NewSourceManager, DeletionRange, ""))) {
-  //      return Err;
-  //    }
-  //  }
 
-  for (const auto &Token : TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange())) {
-    if (Token.kind() != tok::kw_requires) {
-      continue;
-    }
+  const auto &Tokens = TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange());
 
-    auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(Token));
+  const auto *const It = std::find_if(Tokens.begin(), Tokens.end(), [](const auto &Token) {
+    return Token.kind() == tok::kw_requires;
+  });
+
+  if (It != Tokens.end()) {
+    auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(*It));
     auto DeletionRange = syntax::Token::range(NewSourceManager, Spelling->front(), Spelling->back()).toCharRange(NewSourceManager);
 
-    if (auto Err = Replacements.add(tooling::Replacement(NewSourceManager, DeletionRange, ""))) {
-      return Err;
+    if (auto Err = Replacements.add(tooling::Replacement(NewSourceManager, DeletionRange, "")))
+    {
+      return std::move(Err);
     }
   }
+
+// TODO: remove this old code if current one is ok
+//  for (const auto &Token : TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange())) {
+//    if (Token.kind() != tok::kw_requires) {
+//      continue;
+//    }
+//
+//    auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(Token));
+//    auto DeletionRange = syntax::Token::range(NewSourceManager, Spelling->front(), Spelling->back()).toCharRange(NewSourceManager);
+//
+//    if (auto Err = Replacements.add(tooling::Replacement(NewSourceManager, DeletionRange, ""))) {
+//      return Err;
+//    }
+//  }
 
   return Effect::mainFileEdit(SourceManager, Replacements);
 }
@@ -180,6 +170,21 @@ auto TransformConcept::generateRequiresReplacement(SourceManager& SourceManager,
 
   // Replace requirement clause with empty string
   return tooling::Replacement(Context.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
+}
+
+auto TransformConcept::generateTypeReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement
+{
+  auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString();
+  auto TypeSourceRange = TemplateTypeParameterDeclaration->getSourceRange();
+  auto SourceRangeSize =
+      SourceManager.getFileOffset(TypeSourceRange.getEnd()) -
+      SourceManager.getFileOffset(TypeSourceRange.getBegin());
+
+  return  tooling::Replacement(
+      Context.getSourceManager(),
+      TypeSourceRange.getBegin(),
+      SourceRangeSize,
+      ConceptName + ' ');
 }
 
 template <typename T, typename NodeKind>
