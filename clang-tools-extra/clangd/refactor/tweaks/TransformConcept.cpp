@@ -92,6 +92,8 @@ bool TransformConcept::prepare(const Selection &Inputs) {
 
   RequiresExpr = FunctionTemplateDeclaration->getAsFunction()->getTrailingRequiresClause();
 
+  // TODO: check if this logic can be extracted to a method
+  // Check if `requires` token exists
   auto &AST = Inputs.AST;
   auto &TokenBuffer = AST->getTokens();
 
