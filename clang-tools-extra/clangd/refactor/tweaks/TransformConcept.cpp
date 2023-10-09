@@ -165,12 +165,12 @@ auto TransformConcept::generateRequiresReplacement(SourceManager& SourceManager,
 
 auto TransformConcept::generateRequiresTokenReplacement(const syntax::TokenBuffer& TokenBuffer) -> tooling::Replacement
 {
-  auto &NewSourceManager = TokenBuffer.sourceManager();
+  auto &SourceManager = TokenBuffer.sourceManager();
 
   auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(*RequiresToken));
-  auto DeletionRange = syntax::Token::range(NewSourceManager, Spelling->front(), Spelling->back()).toCharRange(NewSourceManager);
+  auto DeletionRange = syntax::Token::range(SourceManager, Spelling->front(), Spelling->back()).toCharRange(SourceManager);
 
-  return tooling::Replacement(NewSourceManager, DeletionRange, "");
+  return tooling::Replacement(SourceManager, DeletionRange, "");
 }
 
 auto TransformConcept::generateTypeReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement
