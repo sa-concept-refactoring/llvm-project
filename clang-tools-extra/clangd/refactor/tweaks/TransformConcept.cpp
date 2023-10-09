@@ -42,8 +42,8 @@ private:
   const Expr *RequiresExpr = nullptr;
   const FunctionTemplateDecl *FunctionTemplateDeclaration = nullptr;
 
-  auto getTemplateParameterIndexOfTemplateArgument(const TemplateArgument &TemplateArgument) -> std::optional<int>;
-  auto generateRequiresReplacement(SourceManager&, ASTContext&) -> tooling::Replacement;
+  static auto getTemplateParameterIndexOfTemplateArgument(const TemplateArgument &TemplateArgument) -> std::optional<int>;
+  auto generateRequiresReplacement(SourceManager&, ASTContext&) -> std::variant<tooling::Replacement, llvm::Error>;
   auto generateTypeReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement;
 
   template <typename T, typename NodeKind>
@@ -103,9 +103,14 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
     return std::move(Err);
   }
 
-  // TODO: Only do this if there are no further require clauses
-  if (auto Err = Replacements.add(generateRequiresReplacement(SourceManager, Context))) {
-    return std::move(Err);
+  auto RequiresReplacement = generateRequiresReplacement(SourceManager, Context);
+
+  if (std::holds_alternative<llvm::Error>(RequiresReplacement)) {
+    return std::move(std::get<llvm::Error>(RequiresReplacement));
+  }
+
+  if (auto Err = Replacements.add(std::get<tooling::Replacement>(RequiresReplacement))) {
+    return Err;
   }
 
   // TODO: Extract this to a method
@@ -158,12 +163,10 @@ auto TransformConcept::getTemplateParameterIndexOfTemplateArgument(const Templat
   return TemplateTypeParameterType->getIndex();
 }
 
-auto TransformConcept::generateRequiresReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement
-{
+auto TransformConcept::generateRequiresReplacement(SourceManager& SourceManager, ASTContext& Context) -> std::variant<tooling::Replacement, llvm::Error> {
   auto RequiresRng = toHalfOpenFileRange(SourceManager, Context.getLangOpts(), RequiresExpr->getSourceRange());
   if (!RequiresRng) {
-    // TODO: Manage error
-    //return error("Could not obtain range of the 'requires' branch. Macros?");
+    return error("Could not obtain range of the 'requires' branch. Macros?");
   }
 
   auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
