@@ -94,7 +94,6 @@ bool TransformConcept::prepare(const Selection &Inputs) {
 
   auto &AST = Inputs.AST;
   auto &TokenBuffer = AST->getTokens();
-  auto &NewSourceManager = TokenBuffer.sourceManager();
 
   const auto &Tokens = TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange());
 
