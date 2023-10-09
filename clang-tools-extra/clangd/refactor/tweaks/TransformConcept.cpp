@@ -41,9 +41,11 @@ private:
   const TemplateTypeParmDecl *TemplateTypeParameterDeclaration = nullptr;
   const Expr *RequiresExpr = nullptr;
   const FunctionTemplateDecl *FunctionTemplateDeclaration = nullptr;
+  const syntax::Token *RequiresToken = nullptr;
 
   static auto getTemplateParameterIndexOfTemplateArgument(const TemplateArgument &TemplateArgument) -> std::optional<int>;
   auto generateRequiresReplacement(SourceManager&, ASTContext&) -> std::variant<tooling::Replacement, llvm::Error>;
+  auto generateRequiresTokenReplacement(const syntax::TokenBuffer& TokenBuffer) -> tooling::Replacement;
   auto generateTypeReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement;
 
   template <typename T, typename NodeKind>
@@ -90,12 +92,29 @@ bool TransformConcept::prepare(const Selection &Inputs) {
 
   RequiresExpr = FunctionTemplateDeclaration->getAsFunction()->getTrailingRequiresClause();
 
+  auto &AST = Inputs.AST;
+  auto &TokenBuffer = AST->getTokens();
+  auto &NewSourceManager = TokenBuffer.sourceManager();
+
+  const auto &Tokens = TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange());
+
+  const auto *const It = std::find_if(Tokens.begin(), Tokens.end(), [](const auto &Token) {
+    return Token.kind() == tok::kw_requires;
+  });
+
+  if (It == Tokens.end()) {
+    return false;
+  }
+
+  RequiresToken = It;
+
   return true;
 }
 
 Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   auto &Context = Inputs.AST->getASTContext();
   auto &SourceManager = Inputs.AST->getSourceManager();
+  auto &TokenBuffer = Inputs.AST->getTokens();
 
   tooling::Replacements Replacements{};
 
@@ -110,43 +129,13 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   }
 
   if (auto Err = Replacements.add(std::get<tooling::Replacement>(RequiresReplacement))) {
-    return Err;
+    return std::move(Err);
   }
 
-  // TODO: Extract this to a method
-  auto &AST = Inputs.AST;
-  auto &TokenBuffer = AST->getTokens();
-  auto &NewSourceManager = TokenBuffer.sourceManager();
-
-  const auto &Tokens = TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange());
-
-  const auto *const It = std::find_if(Tokens.begin(), Tokens.end(), [](const auto &Token) {
-    return Token.kind() == tok::kw_requires;
-  });
-
-  if (It != Tokens.end()) {
-    auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(*It));
-    auto DeletionRange = syntax::Token::range(NewSourceManager, Spelling->front(), Spelling->back()).toCharRange(NewSourceManager);
-
-    if (auto Err = Replacements.add(tooling::Replacement(NewSourceManager, DeletionRange, "")))
-    {
-      return std::move(Err);
-    }
+  if (auto Err = Replacements.add(generateRequiresTokenReplacement(TokenBuffer)))
+  {
+    return std::move(Err);
   }
-
-// TODO: remove this old code if current one is ok
-//  for (const auto &Token : TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange())) {
-//    if (Token.kind() != tok::kw_requires) {
-//      continue;
-//    }
-//
-//    auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(Token));
-//    auto DeletionRange = syntax::Token::range(NewSourceManager, Spelling->front(), Spelling->back()).toCharRange(NewSourceManager);
-//
-//    if (auto Err = Replacements.add(tooling::Replacement(NewSourceManager, DeletionRange, ""))) {
-//      return Err;
-//    }
-//  }
 
   return Effect::mainFileEdit(SourceManager, Replacements);
 }
@@ -173,6 +162,16 @@ auto TransformConcept::generateRequiresReplacement(SourceManager& SourceManager,
 
   // Replace requirement clause with empty string
   return tooling::Replacement(Context.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
+}
+
+auto TransformConcept::generateRequiresTokenReplacement(const syntax::TokenBuffer& TokenBuffer) -> tooling::Replacement
+{
+  auto &NewSourceManager = TokenBuffer.sourceManager();
+
+  auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(*RequiresToken));
+  auto DeletionRange = syntax::Token::range(NewSourceManager, Spelling->front(), Spelling->back()).toCharRange(NewSourceManager);
+
+  return tooling::Replacement(NewSourceManager, DeletionRange, "");
 }
 
 auto TransformConcept::generateTypeReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement
