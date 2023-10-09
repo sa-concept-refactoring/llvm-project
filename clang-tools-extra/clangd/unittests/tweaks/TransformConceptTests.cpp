@@ -18,8 +18,6 @@ namespace {
 TWEAK_TEST(TransformConcept);
 
 TEST_F(TransformConceptTest, Test) {
-//  EXPECT_EQ(apply("template<typename T> void f(T) requires ^std::integral<T> {}"), "template<std::integral T> void f(T) {}");
-
   Header =
     R"cpp(
       template <typename T>
@@ -33,6 +31,10 @@ TEST_F(TransformConceptTest, Test) {
     )cpp";
 
   ExtraArgs = { "-std=c++20" };
+
+//  EXPECT_EQ(
+//      apply("template<typename T> void f(T) requires f^oo<T> {}"),
+//      "template<foo T> void f(T) {}");
 
   EXPECT_AVAILABLE(
     R"cpp(
