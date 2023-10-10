@@ -11,9 +11,6 @@
 #include "support/Logger.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ExprConcepts.h"
-#include "clang/AST/Stmt.h"
-#include "clang/Basic/LangOptions.h"
-#include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Tooling/Core/Replacement.h"
 #include "llvm/ADT/StringRef.h"
@@ -154,7 +151,10 @@ auto TransformConcept::getTemplateParameterIndexOfTemplateArgument(const Templat
 }
 
 auto TransformConcept::generateRequiresReplacement(SourceManager& SourceManager, ASTContext& Context) -> std::variant<tooling::Replacement, llvm::Error> {
-  auto RequiresRng = toHalfOpenFileRange(SourceManager, Context.getLangOpts(), RequiresExpr->getSourceRange());
+  auto RequiresRng = toHalfOpenFileRange(
+      SourceManager,
+      Context.getLangOpts(),
+      RequiresExpr->getSourceRange());
   if (!RequiresRng) {
     return error("Could not obtain range of the 'requires' branch. Macros?");
   }
@@ -162,7 +162,11 @@ auto TransformConcept::generateRequiresReplacement(SourceManager& SourceManager,
   auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
 
   // Replace requirement clause with empty string
-  return tooling::Replacement(Context.getSourceManager(), RequiresRng->getBegin(), RequiresCode.size(), std::string{});
+  return tooling::Replacement(
+      Context.getSourceManager(),
+      RequiresRng->getBegin(),
+      RequiresCode.size(),
+      std::string{});
 }
 
 auto TransformConcept::generateRequiresTokenReplacement(const syntax::TokenBuffer& TokenBuffer) -> tooling::Replacement
@@ -177,17 +181,31 @@ auto TransformConcept::generateRequiresTokenReplacement(const syntax::TokenBuffe
 
 auto TransformConcept::generateTypeReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement
 {
-  auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString();
-  auto TypeSourceRange = TemplateTypeParameterDeclaration->getSourceRange();
-  auto SourceRangeSize =
-      SourceManager.getFileOffset(TypeSourceRange.getEnd()) -
-      SourceManager.getFileOffset(TypeSourceRange.getBegin());
+  auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString(); // "std::integral"
+  auto TypeSourceRange = toHalfOpenFileRange(
+      SourceManager,
+      Context.getLangOpts(),
+      TemplateTypeParameterDeclaration->getSourceRange()); // range of "typename T"
 
+  auto TypeCode = toSourceCode(SourceManager, *TypeSourceRange);
+
+  // TODO: Adjust replacement to either add `T` to `ConceptName` or only replace `typename` instead of `typename T`
   return  tooling::Replacement(
       Context.getSourceManager(),
-      TypeSourceRange.getBegin(),
-      SourceRangeSize,
-      ConceptName + ' ');
+      TypeSourceRange->getBegin(),
+      TypeCode.size(),
+      ConceptName);
+
+// TODO: Remove old logic one the new code above is working correctly
+//  auto SourceRangeSize =
+//      SourceManager.getFileOffset(TypeSourceRange.getEnd()) -
+//      SourceManager.getFileOffset(TypeSourceRange.getBegin());
+
+//  return  tooling::Replacement(
+//      Context.getSourceManager(),
+//      TypeSourceRange.getBegin(),
+//      SourceRangeSize,
+//      ConceptName + ' ');
 }
 
 template <typename T, typename NodeKind>
