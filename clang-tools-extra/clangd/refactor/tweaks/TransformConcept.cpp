@@ -42,12 +42,11 @@ private:
 
   static auto getTemplateParameterIndexOfTemplateArgument(
       const TemplateArgument &TemplateArgument) -> std::optional<int>;
-  auto generateRequiresReplacement(SourceManager &, ASTContext &)
+  auto generateRequiresReplacement(ASTContext &)
       -> std::variant<tooling::Replacement, llvm::Error>;
-  auto generateRequiresTokenReplacement(const syntax::TokenBuffer &TokenBuffer)
+  auto generateRequiresTokenReplacement(const syntax::TokenBuffer &)
       -> tooling::Replacement;
-  auto generateTypeReplacement(SourceManager &SourceManager,
-                               ASTContext &Context) -> tooling::Replacement;
+  auto generateTypeReplacement(ASTContext &) -> tooling::Replacement;
 
   template <typename T, typename NodeKind>
   static auto findNode(const SelectionTree::Node &Root) -> const T *;
@@ -131,18 +130,17 @@ bool TransformConcept::prepare(const Selection &Inputs) {
 
 Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   auto &Context = Inputs.AST->getASTContext();
-  auto &SourceManager = Inputs.AST->getSourceManager();
   auto &TokenBuffer = Inputs.AST->getTokens();
 
   tooling::Replacements Replacements{};
 
   if (auto Err =
-          Replacements.add(generateTypeReplacement(SourceManager, Context))) {
+          Replacements.add(generateTypeReplacement(Context))) {
     return std::move(Err);
   }
 
   auto RequiresReplacement =
-      generateRequiresReplacement(SourceManager, Context);
+      generateRequiresReplacement(Context);
 
   if (std::holds_alternative<llvm::Error>(RequiresReplacement)) {
     return std::move(std::get<llvm::Error>(RequiresReplacement));
@@ -158,7 +156,7 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
     return std::move(Err);
   }
 
-  return Effect::mainFileEdit(SourceManager, Replacements);
+  return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
 
 auto TransformConcept::getTemplateParameterIndexOfTemplateArgument(
@@ -178,9 +176,10 @@ auto TransformConcept::getTemplateParameterIndexOfTemplateArgument(
   return TemplateTypeParameterType->getIndex();
 }
 
-auto TransformConcept::generateRequiresReplacement(SourceManager &SourceManager,
-                                                   ASTContext &Context)
+auto TransformConcept::generateRequiresReplacement(ASTContext &Context)
     -> std::variant<tooling::Replacement, llvm::Error> {
+  auto &SourceManager = Context.getSourceManager();
+
   auto RequiresRng = toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
                                          RequiresExpr->getSourceRange());
   if (!RequiresRng) {
@@ -190,9 +189,8 @@ auto TransformConcept::generateRequiresReplacement(SourceManager &SourceManager,
   auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
 
   // Replace requirement clause with empty string
-  return tooling::Replacement(Context.getSourceManager(),
-                              RequiresRng->getBegin(), RequiresCode.size(),
-                              std::string{});
+  return tooling::Replacement(SourceManager, RequiresRng->getBegin(),
+                              RequiresCode.size(), std::string{});
 }
 
 auto TransformConcept::generateRequiresTokenReplacement(
@@ -208,9 +206,10 @@ auto TransformConcept::generateRequiresTokenReplacement(
   return tooling::Replacement(SourceManager, DeletionRange, "");
 }
 
-auto TransformConcept::generateTypeReplacement(SourceManager &SourceManager,
-                                               ASTContext &Context)
+auto TransformConcept::generateTypeReplacement(ASTContext &Context)
     -> tooling::Replacement {
+  auto &SourceManager = Context.getSourceManager();
+
   auto ConceptName = ConceptSpecializationExpression->getNamedConcept()
                          ->getQualifiedNameAsString(); // "std::integral"
   auto TypeSourceRange =
