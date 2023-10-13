@@ -1,4 +1,4 @@
-//===--- TransformConcept.cpp --------------------------------------*- C++-*-===//
+//===--- TransformConcept.cpp ------------------------------------*- C++-*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -40,21 +40,25 @@ private:
   const FunctionTemplateDecl *FunctionTemplateDeclaration = nullptr;
   const syntax::Token *RequiresToken = nullptr;
 
-  static auto getTemplateParameterIndexOfTemplateArgument(const TemplateArgument &TemplateArgument) -> std::optional<int>;
-  auto generateRequiresReplacement(SourceManager&, ASTContext&) -> std::variant<tooling::Replacement, llvm::Error>;
-  auto generateRequiresTokenReplacement(const syntax::TokenBuffer& TokenBuffer) -> tooling::Replacement;
-  auto generateTypeReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement;
+  static auto getTemplateParameterIndexOfTemplateArgument(
+      const TemplateArgument &TemplateArgument) -> std::optional<int>;
+  auto generateRequiresReplacement(SourceManager &, ASTContext &)
+      -> std::variant<tooling::Replacement, llvm::Error>;
+  auto generateRequiresTokenReplacement(const syntax::TokenBuffer &TokenBuffer)
+      -> tooling::Replacement;
+  auto generateTypeReplacement(SourceManager &SourceManager,
+                               ASTContext &Context) -> tooling::Replacement;
 
   template <typename T, typename NodeKind>
-  static auto findNode(const SelectionTree::Node &Root) -> const T*;
+  static auto findNode(const SelectionTree::Node &Root) -> const T *;
 
   template <typename T>
-  static auto findExpression(const SelectionTree::Node &Root) -> const T* {
+  static auto findExpression(const SelectionTree::Node &Root) -> const T * {
     return findNode<T, Expr>(Root);
   }
 
   template <typename T>
-  static auto findDeclaration(const SelectionTree::Node &Root) -> const T* {
+  static auto findDeclaration(const SelectionTree::Node &Root) -> const T * {
     return findNode<T, Decl>(Root);
   }
 };
@@ -64,41 +68,57 @@ REGISTER_TWEAK(TransformConcept)
 // TODO: Extract some helper methods
 bool TransformConcept::prepare(const Selection &Inputs) {
   const auto *Root = Inputs.ASTSelection.commonAncestor();
-  if (!Root) return false;
+  if (!Root)
+    return false;
 
-  ConceptSpecializationExpression = findExpression<ConceptSpecializationExpr>(*Root);
-  if (!ConceptSpecializationExpression) return false;
+  ConceptSpecializationExpression =
+      findExpression<ConceptSpecializationExpr>(*Root);
+  if (!ConceptSpecializationExpression)
+    return false;
 
-//  TODO: Bring this logic back, it got lost with the refactoring of the find method, maybe we need to revert the commit that introduced this todo or we add proper support for logical combinations
-//  if (Expression && Node && isa_and_nonnull<FunctionTemplateDecl>(Node->Parent->ASTNode.get<Decl>())) {
-//    return Expression;
-//  }
+  //  TODO: Bring this logic back, it got lost with the refactoring of the find
+  //  method, maybe we need to revert the commit that introduced this todo or we
+  //  add proper support for logical combinations if (Expression && Node &&
+  //  isa_and_nonnull<FunctionTemplateDecl>(Node->Parent->ASTNode.get<Decl>()))
+  //  {
+  //    return Expression;
+  //  }
 
   FunctionTemplateDeclaration = findDeclaration<FunctionTemplateDecl>(*Root);
-  if (!FunctionTemplateDeclaration) return false;
+  if (!FunctionTemplateDeclaration)
+    return false;
 
-  auto TemplateArguments = ConceptSpecializationExpression->getTemplateArguments();
-  if (TemplateArguments.size() != 1) return false;
+  auto TemplateArguments =
+      ConceptSpecializationExpression->getTemplateArguments();
+  if (TemplateArguments.size() != 1)
+    return false;
 
-  auto TemplateParameterIndex = getTemplateParameterIndexOfTemplateArgument(TemplateArguments[0]);
-  if (!TemplateParameterIndex) return false;
+  auto TemplateParameterIndex =
+      getTemplateParameterIndexOfTemplateArgument(TemplateArguments[0]);
+  if (!TemplateParameterIndex)
+    return false;
 
   TemplateTypeParameterDeclaration = dyn_cast_or_null<TemplateTypeParmDecl>(
-    FunctionTemplateDeclaration->getTemplateParameters()->getParam(*TemplateParameterIndex));
-  if (!TemplateTypeParameterDeclaration->wasDeclaredWithTypename()) return false;
+      FunctionTemplateDeclaration->getTemplateParameters()->getParam(
+          *TemplateParameterIndex));
+  if (!TemplateTypeParameterDeclaration->wasDeclaredWithTypename())
+    return false;
 
-  RequiresExpr = FunctionTemplateDeclaration->getAsFunction()->getTrailingRequiresClause();
+  RequiresExpr =
+      FunctionTemplateDeclaration->getAsFunction()->getTrailingRequiresClause();
 
   // TODO: check if this logic can be extracted to a method
   // Check if `requires` token exists
   auto &AST = Inputs.AST;
   auto &TokenBuffer = AST->getTokens();
 
-  const auto &Tokens = TokenBuffer.expandedTokens(FunctionTemplateDeclaration->getAsFunction()->getSourceRange());
+  const auto &Tokens = TokenBuffer.expandedTokens(
+      FunctionTemplateDeclaration->getAsFunction()->getSourceRange());
 
-  const auto *const It = std::find_if(Tokens.begin(), Tokens.end(), [](const auto &Token) {
-    return Token.kind() == tok::kw_requires;
-  });
+  const auto *const It =
+      std::find_if(Tokens.begin(), Tokens.end(), [](const auto &Token) {
+        return Token.kind() == tok::kw_requires;
+      });
 
   if (It == Tokens.end()) {
     return false;
@@ -116,45 +136,53 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
 
   tooling::Replacements Replacements{};
 
-  if (auto Err = Replacements.add(generateTypeReplacement(SourceManager, Context))) {
+  if (auto Err =
+          Replacements.add(generateTypeReplacement(SourceManager, Context))) {
     return std::move(Err);
   }
 
-  auto RequiresReplacement = generateRequiresReplacement(SourceManager, Context);
+  auto RequiresReplacement =
+      generateRequiresReplacement(SourceManager, Context);
 
   if (std::holds_alternative<llvm::Error>(RequiresReplacement)) {
     return std::move(std::get<llvm::Error>(RequiresReplacement));
   }
 
-  if (auto Err = Replacements.add(std::get<tooling::Replacement>(RequiresReplacement))) {
+  if (auto Err = Replacements.add(
+          std::get<tooling::Replacement>(RequiresReplacement))) {
     return std::move(Err);
   }
 
-  if (auto Err = Replacements.add(generateRequiresTokenReplacement(TokenBuffer)))
-  {
+  if (auto Err =
+          Replacements.add(generateRequiresTokenReplacement(TokenBuffer))) {
     return std::move(Err);
   }
 
   return Effect::mainFileEdit(SourceManager, Replacements);
 }
 
-auto TransformConcept::getTemplateParameterIndexOfTemplateArgument(const TemplateArgument &TemplateArgument) -> std::optional<int> {
-  if (TemplateArgument.getKind() != TemplateArgument.Type) return {};
+auto TransformConcept::getTemplateParameterIndexOfTemplateArgument(
+    const TemplateArgument &TemplateArgument) -> std::optional<int> {
+  if (TemplateArgument.getKind() != TemplateArgument.Type)
+    return {};
 
   auto TemplateArgumentType = TemplateArgument.getAsType();
-  if (!TemplateArgumentType->isTemplateTypeParmType()) return {};
+  if (!TemplateArgumentType->isTemplateTypeParmType())
+    return {};
 
-  const auto *TemplateTypeParameterType = TemplateArgumentType->getAs<TemplateTypeParmType>();
-  if (!TemplateTypeParameterType) return {};
+  const auto *TemplateTypeParameterType =
+      TemplateArgumentType->getAs<TemplateTypeParmType>();
+  if (!TemplateTypeParameterType)
+    return {};
 
   return TemplateTypeParameterType->getIndex();
 }
 
-auto TransformConcept::generateRequiresReplacement(SourceManager& SourceManager, ASTContext& Context) -> std::variant<tooling::Replacement, llvm::Error> {
-  auto RequiresRng = toHalfOpenFileRange(
-      SourceManager,
-      Context.getLangOpts(),
-      RequiresExpr->getSourceRange());
+auto TransformConcept::generateRequiresReplacement(SourceManager &SourceManager,
+                                                   ASTContext &Context)
+    -> std::variant<tooling::Replacement, llvm::Error> {
+  auto RequiresRng = toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
+                                         RequiresExpr->getSourceRange());
   if (!RequiresRng) {
     return error("Could not obtain range of the 'requires' branch. Macros?");
   }
@@ -162,55 +190,57 @@ auto TransformConcept::generateRequiresReplacement(SourceManager& SourceManager,
   auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
 
   // Replace requirement clause with empty string
-  return tooling::Replacement(
-      Context.getSourceManager(),
-      RequiresRng->getBegin(),
-      RequiresCode.size(),
-      std::string{});
+  return tooling::Replacement(Context.getSourceManager(),
+                              RequiresRng->getBegin(), RequiresCode.size(),
+                              std::string{});
 }
 
-auto TransformConcept::generateRequiresTokenReplacement(const syntax::TokenBuffer& TokenBuffer) -> tooling::Replacement
-{
+auto TransformConcept::generateRequiresTokenReplacement(
+    const syntax::TokenBuffer &TokenBuffer) -> tooling::Replacement {
   auto &SourceManager = TokenBuffer.sourceManager();
 
-  auto Spelling = TokenBuffer.spelledForExpanded(llvm::ArrayRef(*RequiresToken));
-  auto DeletionRange = syntax::Token::range(SourceManager, Spelling->front(), Spelling->back()).toCharRange(SourceManager);
+  auto Spelling =
+      TokenBuffer.spelledForExpanded(llvm::ArrayRef(*RequiresToken));
+  auto DeletionRange =
+      syntax::Token::range(SourceManager, Spelling->front(), Spelling->back())
+          .toCharRange(SourceManager);
 
   return tooling::Replacement(SourceManager, DeletionRange, "");
 }
 
-auto TransformConcept::generateTypeReplacement(SourceManager& SourceManager, ASTContext& Context) -> tooling::Replacement
-{
-  auto ConceptName = ConceptSpecializationExpression->getNamedConcept()->getQualifiedNameAsString(); // "std::integral"
-  auto TypeSourceRange = toHalfOpenFileRange(
-      SourceManager,
-      Context.getLangOpts(),
-      TemplateTypeParameterDeclaration->getSourceRange()); // range of "typename T"
+auto TransformConcept::generateTypeReplacement(SourceManager &SourceManager,
+                                               ASTContext &Context)
+    -> tooling::Replacement {
+  auto ConceptName = ConceptSpecializationExpression->getNamedConcept()
+                         ->getQualifiedNameAsString(); // "std::integral"
+  auto TypeSourceRange =
+      toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
+                          TemplateTypeParameterDeclaration
+                              ->getSourceRange()); // range of "typename T"
 
   auto TypeCode = toSourceCode(SourceManager, *TypeSourceRange);
 
-  // TODO: Adjust replacement to either add `T` to `ConceptName` or only replace `typename` instead of `typename T`
-  return  tooling::Replacement(
-      Context.getSourceManager(),
-      TypeSourceRange->getBegin(),
-      TypeCode.size(),
-      ConceptName);
+  // TODO: Adjust replacement to either add `T` to `ConceptName` or only replace
+  // `typename` instead of `typename T`
+  return tooling::Replacement(Context.getSourceManager(),
+                              TypeSourceRange->getBegin(), TypeCode.size(),
+                              ConceptName);
 
-// TODO: Remove old logic one the new code above is working correctly
-//  auto SourceRangeSize =
-//      SourceManager.getFileOffset(TypeSourceRange.getEnd()) -
-//      SourceManager.getFileOffset(TypeSourceRange.getBegin());
+  // TODO: Remove old logic one the new code above is working correctly
+  //  auto SourceRangeSize =
+  //      SourceManager.getFileOffset(TypeSourceRange.getEnd()) -
+  //      SourceManager.getFileOffset(TypeSourceRange.getBegin());
 
-//  return  tooling::Replacement(
-//      Context.getSourceManager(),
-//      TypeSourceRange.getBegin(),
-//      SourceRangeSize,
-//      ConceptName + ' ');
+  //  return  tooling::Replacement(
+  //      Context.getSourceManager(),
+  //      TypeSourceRange.getBegin(),
+  //      SourceRangeSize,
+  //      ConceptName + ' ');
 }
 
 template <typename T, typename NodeKind>
 auto TransformConcept::findNode(const SelectionTree::Node &Root) -> const T * {
-  const T* Result = nullptr;
+  const T *Result = nullptr;
 
   const SelectionTree::Node *Node = &Root;
   for (; Node && !Result; Node = Node->Parent) {
