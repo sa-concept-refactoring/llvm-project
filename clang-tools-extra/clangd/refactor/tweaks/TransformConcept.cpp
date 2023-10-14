@@ -46,7 +46,8 @@ private:
       -> std::variant<tooling::Replacement, llvm::Error>;
   auto generateRequiresTokenReplacement(const syntax::TokenBuffer &)
       -> tooling::Replacement;
-  auto generateTypeReplacement(ASTContext &) -> tooling::Replacement;
+  auto generateTemplateParameterReplacement(ASTContext &Context)
+      -> tooling::Replacement;
 
   template <typename T, typename NodeKind>
   static auto findNode(const SelectionTree::Node &Root) -> const T *;
@@ -135,12 +136,11 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   tooling::Replacements Replacements{};
 
   if (auto Err =
-          Replacements.add(generateTypeReplacement(Context))) {
+          Replacements.add(generateTemplateParameterReplacement(Context))) {
     return std::move(Err);
   }
 
-  auto RequiresReplacement =
-      generateRequiresReplacement(Context);
+  auto RequiresReplacement = generateRequiresReplacement(Context);
 
   if (std::holds_alternative<llvm::Error>(RequiresReplacement)) {
     return std::move(std::get<llvm::Error>(RequiresReplacement));
