@@ -156,7 +156,9 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
     return std::move(Err);
   }
 
-  return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
+  auto Effect = Effect::mainFileEdit(Context.getSourceManager(), Replacements);
+  Effect->FormatEdits = false;
+  return Effect;
 }
 
 auto TransformConcept::getTemplateParameterIndexOfTemplateArgument(
