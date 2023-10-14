@@ -65,7 +65,6 @@ private:
 
 REGISTER_TWEAK(TransformConcept)
 
-// TODO: Extract some helper methods
 bool TransformConcept::prepare(const Selection &Inputs) {
   if (!Inputs.AST->getLangOpts().CPlusPlus20)
     return false;
@@ -74,10 +73,9 @@ bool TransformConcept::prepare(const Selection &Inputs) {
   if (!Root)
     return false;
 
-  ConceptSpecializationExpression =
-      findExpression<ConceptSpecializationExpr>(*Root);
-  if (!ConceptSpecializationExpression)
+  if(!(ConceptSpecializationExpression = findExpression<ConceptSpecializationExpr>(*Root))) {
     return false;
+  }
 
   //  TODO: Bring this logic back, it got lost with the refactoring of the find
   //  method, maybe we need to revert the commit that introduced this todo or we
@@ -87,9 +85,9 @@ bool TransformConcept::prepare(const Selection &Inputs) {
   //    return Expression;
   //  }
 
-  FunctionTemplateDeclaration = findDeclaration<FunctionTemplateDecl>(*Root);
-  if (!FunctionTemplateDeclaration)
+  if (!(FunctionTemplateDeclaration = findDeclaration<FunctionTemplateDecl>(*Root))) {
     return false;
+  }
 
   auto TemplateArguments =
       ConceptSpecializationExpression->getTemplateArguments();
