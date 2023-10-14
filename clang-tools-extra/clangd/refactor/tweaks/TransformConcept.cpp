@@ -206,35 +206,27 @@ auto TransformConcept::generateRequiresTokenReplacement(
   return tooling::Replacement(SourceManager, DeletionRange, "");
 }
 
-auto TransformConcept::generateTypeReplacement(ASTContext &Context)
+auto TransformConcept::generateTemplateParameterReplacement(ASTContext &Context)
     -> tooling::Replacement {
   auto &SourceManager = Context.getSourceManager();
 
   auto ConceptName = ConceptSpecializationExpression->getNamedConcept()
-                         ->getQualifiedNameAsString(); // "std::integral"
-  auto TypeSourceRange =
+                         ->getQualifiedNameAsString();
+
+  auto TemplateParameterName =
+      TemplateTypeParameterDeclaration->getQualifiedNameAsString();
+
+  auto TemplateParameterReplacement = ConceptName + ' ' + TemplateParameterName;
+
+  auto TemplateParameterRange =
       toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
-                          TemplateTypeParameterDeclaration
-                              ->getSourceRange()); // range of "typename T"
+                          TemplateTypeParameterDeclaration->getSourceRange());
 
-  auto TypeCode = toSourceCode(SourceManager, *TypeSourceRange);
+  auto SourceCode = toSourceCode(SourceManager, *TemplateParameterRange);
 
-  // TODO: Adjust replacement to either add `T` to `ConceptName` or only replace
-  // `typename` instead of `typename T`
   return tooling::Replacement(Context.getSourceManager(),
-                              TypeSourceRange->getBegin(), TypeCode.size(),
-                              ConceptName);
-
-  // TODO: Remove old logic one the new code above is working correctly
-  //  auto SourceRangeSize =
-  //      SourceManager.getFileOffset(TypeSourceRange.getEnd()) -
-  //      SourceManager.getFileOffset(TypeSourceRange.getBegin());
-
-  //  return  tooling::Replacement(
-  //      Context.getSourceManager(),
-  //      TypeSourceRange.getBegin(),
-  //      SourceRangeSize,
-  //      ConceptName + ' ');
+                              TemplateParameterRange->getBegin(),
+                              SourceCode.size(), TemplateParameterReplacement);
 }
 
 template <typename T, typename NodeKind>
