@@ -186,9 +186,8 @@ auto TransformConcept::generateRequiresReplacement(ASTContext &Context)
 
   auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
 
-  // Replace requirement clause with empty string
   return tooling::Replacement(SourceManager, RequiresRng->getBegin(),
-                              RequiresCode.size(), std::string{});
+                              RequiresCode.size(), "");
 }
 
 auto TransformConcept::generateRequiresTokenReplacement(
@@ -197,6 +196,7 @@ auto TransformConcept::generateRequiresTokenReplacement(
 
   auto Spelling =
       TokenBuffer.spelledForExpanded(llvm::ArrayRef(*RequiresToken));
+
   auto DeletionRange =
       syntax::Token::range(SourceManager, Spelling->front(), Spelling->back())
           .toCharRange(SourceManager);
