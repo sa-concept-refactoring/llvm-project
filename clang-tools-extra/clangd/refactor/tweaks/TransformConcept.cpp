@@ -67,6 +67,9 @@ REGISTER_TWEAK(TransformConcept)
 
 // TODO: Extract some helper methods
 bool TransformConcept::prepare(const Selection &Inputs) {
+  if (!Inputs.AST->getLangOpts().CPlusPlus20)
+    return false;
+
   const auto *Root = Inputs.ASTSelection.commonAncestor();
   if (!Root)
     return false;
