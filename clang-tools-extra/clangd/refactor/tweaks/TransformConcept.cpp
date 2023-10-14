@@ -49,6 +49,9 @@ private:
   auto generateTemplateParameterReplacement(ASTContext &Context)
       -> tooling::Replacement;
 
+  static auto findToken(const ParsedAST *, const SourceRange &,
+                        const tok::TokenKind) -> const syntax::Token *;
+
   template <typename T, typename NodeKind>
   static auto findNode(const SelectionTree::Node &Root) -> const T *;
 
@@ -73,7 +76,8 @@ bool TransformConcept::prepare(const Selection &Inputs) {
   if (!Root)
     return false;
 
-  if(!(ConceptSpecializationExpression = findExpression<ConceptSpecializationExpr>(*Root))) {
+  if (!(ConceptSpecializationExpression =
+            findExpression<ConceptSpecializationExpr>(*Root))) {
     return false;
   }
 
@@ -85,7 +89,8 @@ bool TransformConcept::prepare(const Selection &Inputs) {
   //    return Expression;
   //  }
 
-  if (!(FunctionTemplateDeclaration = findDeclaration<FunctionTemplateDecl>(*Root))) {
+  if (!(FunctionTemplateDeclaration =
+            findDeclaration<FunctionTemplateDecl>(*Root))) {
     return false;
   }
 
@@ -105,27 +110,14 @@ bool TransformConcept::prepare(const Selection &Inputs) {
   if (!TemplateTypeParameterDeclaration->wasDeclaredWithTypename())
     return false;
 
-  RequiresExpr =
-      FunctionTemplateDeclaration->getAsFunction()->getTrailingRequiresClause();
+  const auto *Function = FunctionTemplateDeclaration->getAsFunction();
 
-  // TODO: check if this logic can be extracted to a method
-  // Check if `requires` token exists
-  auto &AST = Inputs.AST;
-  auto &TokenBuffer = AST->getTokens();
+  RequiresExpr = Function->getAsFunction()->getTrailingRequiresClause();
 
-  const auto &Tokens = TokenBuffer.expandedTokens(
-      FunctionTemplateDeclaration->getAsFunction()->getSourceRange());
-
-  const auto *const It =
-      std::find_if(Tokens.begin(), Tokens.end(), [](const auto &Token) {
-        return Token.kind() == tok::kw_requires;
-      });
-
-  if (It == Tokens.end()) {
+  if (!(RequiresToken = findToken(Inputs.AST, Function->getSourceRange(),
+                                  tok::kw_requires))) {
     return false;
   }
-
-  RequiresToken = It;
 
   return true;
 }
@@ -233,6 +225,26 @@ auto TransformConcept::generateTemplateParameterReplacement(ASTContext &Context)
   return tooling::Replacement(Context.getSourceManager(),
                               TemplateParameterRange->getBegin(),
                               SourceCode.size(), TemplateParameterReplacement);
+}
+
+auto clang::clangd::TransformConcept::findToken(const ParsedAST *AST,
+                                                const SourceRange &SourceRange,
+                                                const tok::TokenKind TokenKind)
+    -> const syntax::Token * {
+  auto &TokenBuffer = AST->getTokens();
+  const auto &Tokens = TokenBuffer.expandedTokens(SourceRange);
+
+  const auto Predicate = [TokenKind](const auto &Token) {
+    return Token.kind() == TokenKind;
+  };
+
+  const auto *const It = std::find_if(Tokens.begin(), Tokens.end(), Predicate);
+
+  if (It == Tokens.end()) {
+    return nullptr;
+  }
+
+  return It;
 }
 
 template <typename T, typename NodeKind>
