@@ -157,6 +157,9 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   }
 
   auto Effect = Effect::mainFileEdit(Context.getSourceManager(), Replacements);
+  if (auto Err = Effect.takeError())
+    return Err;
+
   Effect->FormatEdits = false;
   return Effect;
 }
