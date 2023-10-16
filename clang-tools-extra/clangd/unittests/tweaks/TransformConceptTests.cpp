@@ -1,4 +1,4 @@
-//===-- TransformConceptTests.cpp ---------------------------------*- C++ -*-===//
+//===-- TransformConceptTests.cpp -------------------------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,8 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "TweakTesting.h"
-#include "gmock/gmock-matchers.h"
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace clang {
@@ -18,8 +16,7 @@ namespace {
 TWEAK_TEST(TransformConcept);
 
 TEST_F(TransformConceptTest, Test) {
-  Header =
-    R"cpp(
+  Header = R"cpp(
       template <typename T>
       concept foo = true;
 
@@ -30,7 +27,7 @@ TEST_F(TransformConceptTest, Test) {
       concept baz = true;
     )cpp";
 
-  ExtraArgs = { "-std=c++20" };
+  ExtraArgs = {"-std=c++20"};
 
   //
   // Extra spaces are expected and will be stripped by the formatter.
@@ -41,50 +38,38 @@ TEST_F(TransformConceptTest, Test) {
       "template <typename T, foo U> void f(T)   {}");
 
   EXPECT_EQ(
-      apply("template <typename T, typename U> requires foo<^U> void f(T) {}"),
-      "template <typename T, foo U>   void f(T) {}");
+      apply("template <typename T, typename U> requires foo<^T> void f(T) {}"),
+      "template <foo T, typename U>   void f(T) {}");
 
-  EXPECT_AVAILABLE(
-    R"cpp(
+  EXPECT_AVAILABLE(R"cpp(
       template <typename T> void f(T)
         requires ^f^o^o^<^T^> {}
-    )cpp"
-  );
+    )cpp");
 
-  EXPECT_AVAILABLE(
-    R"cpp(
-      template <typename T> requires ^f^o^o^<^T^> {}
-      void f(T)
-    )cpp"
-  );
+  EXPECT_AVAILABLE(R"cpp(
+      template <typename T> requires ^f^o^o^<^T^>
+      void f(T) {}
+    )cpp");
 
-  EXPECT_AVAILABLE(
-      R"cpp(
+  EXPECT_AVAILABLE(R"cpp(
       template <typename T, typename U> void f(T)
         requires ^f^o^o^<^T^> {}
-    )cpp"
-  );
+    )cpp");
 
-  EXPECT_UNAVAILABLE(
-    R"cpp(
+  EXPECT_UNAVAILABLE(R"cpp(
       template <bar T> void f(T)
         requires ^f^o^o^<^T^> {}
-    )cpp"
-  );
+    )cpp");
 
-  EXPECT_UNAVAILABLE(
-    R"cpp(
+  EXPECT_UNAVAILABLE(R"cpp(
       template <typename T, typename U> void f(T, U)
         requires ^b^a^z^<^T^,^ ^U^> {}
-    )cpp"
-  );
+    )cpp");
 
-  EXPECT_UNAVAILABLE(
-      R"cpp(
+  EXPECT_UNAVAILABLE(R"cpp(
       template <typename T> void f(T)
         requires ^f^o^o^<^T^>^ ^&^&^ ^b^a^r^<^T^> {}
-    )cpp"
-  );
+    )cpp");
 }
 
 } // namespace
