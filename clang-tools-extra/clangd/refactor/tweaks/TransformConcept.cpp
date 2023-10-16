@@ -11,7 +11,6 @@
 #include "support/Logger.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ExprConcepts.h"
-#include "clang/Basic/SourceManager.h"
 #include "clang/Tooling/Core/Replacement.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
@@ -53,15 +52,18 @@ private:
                         const tok::TokenKind) -> const syntax::Token *;
 
   template <typename T, typename NodeKind>
-  static auto findNode(const SelectionTree::Node &Root) -> const T *;
+  static auto findNode(const SelectionTree::Node &Root)
+      -> std::tuple<const T *, const SelectionTree::Node *>;
 
   template <typename T>
-  static auto findExpression(const SelectionTree::Node &Root) -> const T * {
+  static auto findExpression(const SelectionTree::Node &Root)
+      -> std::tuple<const T *, const SelectionTree::Node *> {
     return findNode<T, Expr>(Root);
   }
 
   template <typename T>
-  static auto findDeclaration(const SelectionTree::Node &Root) -> const T * {
+  static auto findDeclaration(const SelectionTree::Node &Root)
+      -> std::tuple<const T *, const SelectionTree::Node *> {
     return findNode<T, Decl>(Root);
   }
 };
@@ -69,53 +71,63 @@ private:
 REGISTER_TWEAK(TransformConcept)
 
 bool TransformConcept::prepare(const Selection &Inputs) {
-  if (!Inputs.AST->getLangOpts().CPlusPlus20)
-    return false;
-
-  const auto *Root = Inputs.ASTSelection.commonAncestor();
-  if (!Root)
-    return false;
-
-  if (!(ConceptSpecializationExpression =
-            findExpression<ConceptSpecializationExpr>(*Root))) {
+  if (!Inputs.AST->getLangOpts().CPlusPlus20) {
     return false;
   }
 
-  //  TODO: Bring this logic back, it got lost with the refactoring of the find
-  //  method, maybe we need to revert the commit that introduced this todo or we
-  //  add proper support for logical combinations if (Expression && Node &&
-  //  isa_and_nonnull<FunctionTemplateDecl>(Node->Parent->ASTNode.get<Decl>()))
-  //  {
-  //    return Expression;
-  //  }
+  const auto *Root = Inputs.ASTSelection.commonAncestor();
+  if (!Root) {
+    return false;
+  }
 
-  if (!(FunctionTemplateDeclaration =
-            findDeclaration<FunctionTemplateDecl>(*Root))) {
+  const SelectionTree::Node *ConceptSpecializationExpressionTreeNode;
+  std::tie(ConceptSpecializationExpression,
+           ConceptSpecializationExpressionTreeNode) =
+      findExpression<ConceptSpecializationExpr>(*Root);
+  if (!ConceptSpecializationExpression) {
+    return false;
+  }
+
+  // Only allow concepts that are direct children of function template
+  // declarations. This excludes conjunctions of concepts which are not handled.
+  if (!isa_and_nonnull<FunctionTemplateDecl>(
+          ConceptSpecializationExpressionTreeNode->Parent->ASTNode
+              .get<Decl>())) {
+    return false;
+  }
+
+  FunctionTemplateDeclaration =
+      std::get<0>(findDeclaration<FunctionTemplateDecl>(*Root));
+  if (!FunctionTemplateDeclaration) {
     return false;
   }
 
   auto TemplateArguments =
       ConceptSpecializationExpression->getTemplateArguments();
-  if (TemplateArguments.size() != 1)
+  if (TemplateArguments.size() != 1) {
     return false;
+  }
 
   auto TemplateParameterIndex =
       getTemplateParameterIndexOfTemplateArgument(TemplateArguments[0]);
-  if (!TemplateParameterIndex)
+  if (!TemplateParameterIndex) {
     return false;
+  }
 
   TemplateTypeParameterDeclaration = dyn_cast_or_null<TemplateTypeParmDecl>(
       FunctionTemplateDeclaration->getTemplateParameters()->getParam(
           *TemplateParameterIndex));
-  if (!TemplateTypeParameterDeclaration->wasDeclaredWithTypename())
+  if (!TemplateTypeParameterDeclaration->wasDeclaredWithTypename()) {
     return false;
+  }
 
   const auto *Function = FunctionTemplateDeclaration->getAsFunction();
 
   RequiresExpr = Function->getAsFunction()->getTrailingRequiresClause();
+  RequiresToken =
+      findToken(Inputs.AST, Function->getSourceRange(), tok::kw_requires);
 
-  if (!(RequiresToken = findToken(Inputs.AST, Function->getSourceRange(),
-                                  tok::kw_requires))) {
+  if (!RequiresToken) {
     return false;
   }
 
@@ -149,12 +161,7 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
     return std::move(Err);
   }
 
-  auto Effect = Effect::mainFileEdit(Context.getSourceManager(), Replacements);
-  if (auto Err = Effect.takeError())
-    return Err;
-
-  Effect->FormatEdits = false;
-  return Effect;
+  return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
 
 auto TransformConcept::getTemplateParameterIndexOfTemplateArgument(
@@ -248,7 +255,8 @@ auto clang::clangd::TransformConcept::findToken(const ParsedAST *AST,
 }
 
 template <typename T, typename NodeKind>
-auto TransformConcept::findNode(const SelectionTree::Node &Root) -> const T * {
+auto TransformConcept::findNode(const SelectionTree::Node &Root)
+    -> std::tuple<const T *, const SelectionTree::Node *> {
   const T *Result = nullptr;
 
   const SelectionTree::Node *Node = &Root;
@@ -256,7 +264,7 @@ auto TransformConcept::findNode(const SelectionTree::Node &Root) -> const T * {
     Result = dyn_cast_or_null<T>(Node->ASTNode.get<NodeKind>());
   }
 
-  return Result;
+  return {Result, Node};
 }
 
 } // namespace
