@@ -215,8 +215,8 @@ auto InlineConceptRequirement::generateRequiresTokenReplacement(
   return tooling::Replacement(SourceManager, DeletionRange, "");
 }
 
-auto InlineConceptRequirement::generateTemplateParameterReplacement(ASTContext &Context)
-    -> tooling::Replacement {
+auto InlineConceptRequirement::generateTemplateParameterReplacement(
+    ASTContext &Context) -> tooling::Replacement {
   auto &SourceManager = Context.getSourceManager();
 
   auto ConceptName = ConceptSpecializationExpression->getNamedConcept()
@@ -238,10 +238,9 @@ auto InlineConceptRequirement::generateTemplateParameterReplacement(ASTContext &
                               SourceCode.size(), TemplateParameterReplacement);
 }
 
-auto clang::clangd::InlineConceptRequirement::findToken(const ParsedAST *AST,
-                                                const SourceRange &SourceRange,
-                                                const tok::TokenKind TokenKind)
-    -> const syntax::Token * {
+auto clang::clangd::InlineConceptRequirement::findToken(
+    const ParsedAST *AST, const SourceRange &SourceRange,
+    const tok::TokenKind TokenKind) -> const syntax::Token * {
   auto &TokenBuffer = AST->getTokens();
   const auto &Tokens = TokenBuffer.expandedTokens(SourceRange);
 
