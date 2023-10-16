@@ -34,8 +34,8 @@ TEST_F(TransformConceptTest, Test) {
 
   // Extra spaces are expected and will be stripped by the formatter.
   EXPECT_EQ(
-      apply("template <typename T> void f(T) requires f^oo<T> {}"),
-      "template <foo T> void f(T)   {}");
+      apply("template <typename T, typename U> void f(T) requires f^oo<U> {}"),
+      "template <typename T, foo U> void f(T)   {}");
 
   EXPECT_AVAILABLE(
     R"cpp(
@@ -62,6 +62,13 @@ TEST_F(TransformConceptTest, Test) {
     R"cpp(
       template <typename T, typename U> void f(T, U)
         requires ^b^a^z^<^T^,^ ^U^> {}
+    )cpp"
+  );
+
+  EXPECT_UNAVAILABLE(
+      R"cpp(
+      template <typename T> void f(T)
+        requires ^f^o^o^<^T^>^ ^&^&^ ^b^a^r^<^T^> {}
     )cpp"
   );
 }
