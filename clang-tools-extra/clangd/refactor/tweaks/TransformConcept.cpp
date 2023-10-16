@@ -32,12 +32,10 @@ public:
   }
 
 private:
-  // TODO: Investigate if we can reduce how much data we store
-  const ConceptSpecializationExpr *ConceptSpecializationExpression = nullptr;
-  const TemplateTypeParmDecl *TemplateTypeParameterDeclaration = nullptr;
-  const Expr *RequiresExpr = nullptr;
-  const FunctionTemplateDecl *FunctionTemplateDeclaration = nullptr;
-  const syntax::Token *RequiresToken = nullptr;
+  const ConceptSpecializationExpr *ConceptSpecializationExpression;
+  const TemplateTypeParmDecl *TemplateTypeParameterDeclaration;
+  const Expr *RequiresExpr;
+  const syntax::Token *RequiresToken;
 
   static auto getTemplateParameterIndexOfTemplateArgument(
       const TemplateArgument &TemplateArgument) -> std::optional<int>;
@@ -96,7 +94,7 @@ bool TransformConcept::prepare(const Selection &Inputs) {
     return false;
   }
 
-  FunctionTemplateDeclaration =
+  const FunctionTemplateDecl *FunctionTemplateDeclaration =
       std::get<0>(findDeclaration<FunctionTemplateDecl>(*Root));
   if (!FunctionTemplateDeclaration) {
     return false;
