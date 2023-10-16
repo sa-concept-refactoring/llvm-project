@@ -1,4 +1,4 @@
-//===--- TransformConcept.cpp ------------------------------------*- C++-*-===//
+//===--- InlineConceptRequirement.cpp ----------------------------*- C++-*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -19,14 +19,20 @@
 namespace clang {
 namespace clangd {
 namespace {
-/// Transforms a concept
-class TransformConcept : public Tweak {
+/// Inlines a concept requirement.
+///
+/// Before:
+///   template <typename T> void f(T) requires foo<T> {}
+///                                            ^^^^^^
+/// After:
+///   template <foo T> void f(T) {}
+class InlineConceptRequirement : public Tweak {
 public:
   const char *id() const final;
 
   bool prepare(const Selection &Inputs) override;
   Expected<Effect> apply(const Selection &Inputs) override;
-  std::string title() const override { return "Transform concept"; }
+  std::string title() const override { return "Inline concept requirement"; }
   llvm::StringLiteral kind() const override {
     return CodeAction::REFACTOR_KIND;
   }
@@ -65,9 +71,9 @@ private:
   }
 };
 
-REGISTER_TWEAK(TransformConcept)
+REGISTER_TWEAK(InlineConceptRequirement)
 
-bool TransformConcept::prepare(const Selection &Inputs) {
+bool InlineConceptRequirement::prepare(const Selection &Inputs) {
   if (!Inputs.AST->getLangOpts().CPlusPlus20) {
     return false;
   }
@@ -130,7 +136,8 @@ bool TransformConcept::prepare(const Selection &Inputs) {
   return true;
 }
 
-Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
+Expected<Tweak::Effect>
+InlineConceptRequirement::apply(const Selection &Inputs) {
   auto &Context = Inputs.AST->getASTContext();
   auto &TokenBuffer = Inputs.AST->getTokens();
 
@@ -160,7 +167,7 @@ Expected<Tweak::Effect> TransformConcept::apply(const Selection &Inputs) {
   return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
 
-auto TransformConcept::getTemplateParameterIndexOfTemplateArgument(
+auto InlineConceptRequirement::getTemplateParameterIndexOfTemplateArgument(
     const TemplateArgument &TemplateArgument) -> std::optional<int> {
   if (TemplateArgument.getKind() != TemplateArgument.Type)
     return {};
@@ -177,7 +184,7 @@ auto TransformConcept::getTemplateParameterIndexOfTemplateArgument(
   return TemplateTypeParameterType->getIndex();
 }
 
-auto TransformConcept::generateRequiresReplacement(ASTContext &Context)
+auto InlineConceptRequirement::generateRequiresReplacement(ASTContext &Context)
     -> std::variant<tooling::Replacement, llvm::Error> {
   auto &SourceManager = Context.getSourceManager();
 
@@ -194,7 +201,7 @@ auto TransformConcept::generateRequiresReplacement(ASTContext &Context)
                               RequiresCode.size(), "");
 }
 
-auto TransformConcept::generateRequiresTokenReplacement(
+auto InlineConceptRequirement::generateRequiresTokenReplacement(
     const syntax::TokenBuffer &TokenBuffer) -> tooling::Replacement {
   auto &SourceManager = TokenBuffer.sourceManager();
 
@@ -208,7 +215,7 @@ auto TransformConcept::generateRequiresTokenReplacement(
   return tooling::Replacement(SourceManager, DeletionRange, "");
 }
 
-auto TransformConcept::generateTemplateParameterReplacement(ASTContext &Context)
+auto InlineConceptRequirement::generateTemplateParameterReplacement(ASTContext &Context)
     -> tooling::Replacement {
   auto &SourceManager = Context.getSourceManager();
 
@@ -231,7 +238,7 @@ auto TransformConcept::generateTemplateParameterReplacement(ASTContext &Context)
                               SourceCode.size(), TemplateParameterReplacement);
 }
 
-auto clang::clangd::TransformConcept::findToken(const ParsedAST *AST,
+auto clang::clangd::InlineConceptRequirement::findToken(const ParsedAST *AST,
                                                 const SourceRange &SourceRange,
                                                 const tok::TokenKind TokenKind)
     -> const syntax::Token * {
@@ -252,7 +259,7 @@ auto clang::clangd::TransformConcept::findToken(const ParsedAST *AST,
 }
 
 template <typename T, typename NodeKind>
-auto TransformConcept::findNode(const SelectionTree::Node &Root)
+auto InlineConceptRequirement::findNode(const SelectionTree::Node &Root)
     -> std::tuple<const T *, const SelectionTree::Node *> {
   const T *Result = nullptr;
 

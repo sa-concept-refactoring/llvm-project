@@ -125,6 +125,7 @@ add_unittest(ClangdUnitTests ClangdTests
   tweaks/ExpandMacroTests.cpp
   tweaks/ExtractFunctionTests.cpp
   tweaks/ExtractVariableTests.cpp
+  tweaks/InlineConceptRequirement.cpp
   tweaks/MemberwiseConstructorTests.cpp
   tweaks/ObjCLocalizeStringLiteralTests.cpp
   tweaks/ObjCMemberwiseInitializerTests.cpp
@@ -134,7 +135,6 @@ add_unittest(ClangdUnitTests ClangdTests
   tweaks/ShowSelectionTreeTests.cpp
   tweaks/SpecialMembersTests.cpp
   tweaks/SwapIfBranchesTests.cpp
-  tweaks/TransformConceptTests.cpp
   tweaks/TweakTesting.cpp
   tweaks/TweakTests.cpp
 

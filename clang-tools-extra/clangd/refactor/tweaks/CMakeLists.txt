@@ -21,6 +21,7 @@ add_clang_library(clangDaemonTweaks OBJECT
   ExpandMacro.cpp
   ExtractFunction.cpp
   ExtractVariable.cpp
+  InlineConceptRequirement.cpp
   MemberwiseConstructor.cpp
   ObjCLocalizeStringLiteral.cpp
   ObjCMemberwiseInitializer.cpp
@@ -29,7 +30,6 @@ add_clang_library(clangDaemonTweaks OBJECT
   RemoveUsingNamespace.cpp
   SpecialMembers.cpp
   SwapIfBranches.cpp
-  TransformConcept.cpp
 
   LINK_LIBS
   clangAST

@@ -1,4 +1,4 @@
-//===-- TransformConceptTests.cpp -------------------------------*- C++ -*-===//
+//===-- InlineConceptRequirement.cpp ----------------------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -13,9 +13,9 @@ namespace clang {
 namespace clangd {
 namespace {
 
-TWEAK_TEST(TransformConcept);
+TWEAK_TEST(InlineConceptRequirement);
 
-TEST_F(TransformConceptTest, Test) {
+TEST_F(InlineConceptRequirementTest, Test) {
   Header = R"cpp(
       template <typename T>
       concept foo = true;
