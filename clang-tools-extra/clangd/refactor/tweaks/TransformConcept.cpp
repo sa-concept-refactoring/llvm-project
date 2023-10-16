@@ -34,7 +34,6 @@ public:
 private:
   const ConceptSpecializationExpr *ConceptSpecializationExpression;
   const TemplateTypeParmDecl *TemplateTypeParameterDeclaration;
-  const Expr *RequiresExpr;
   const syntax::Token *RequiresToken;
 
   static auto getTemplateParameterIndexOfTemplateArgument(
@@ -87,10 +86,12 @@ bool TransformConcept::prepare(const Selection &Inputs) {
   }
 
   // Only allow concepts that are direct children of function template
-  // declarations. This excludes conjunctions of concepts which are not handled.
-  if (!isa_and_nonnull<FunctionTemplateDecl>(
-          ConceptSpecializationExpressionTreeNode->Parent->ASTNode
-              .get<Decl>())) {
+  // declarations or function declarations. This excludes conjunctions of
+  // concepts which are not handled.
+  const auto *ParentDeclaration =
+      ConceptSpecializationExpressionTreeNode->Parent->ASTNode.get<Decl>();
+  if (!isa_and_nonnull<FunctionTemplateDecl>(ParentDeclaration) &&
+      !isa_and_nonnull<FunctionDecl>(ParentDeclaration)) {
     return false;
   }
 
@@ -119,12 +120,9 @@ bool TransformConcept::prepare(const Selection &Inputs) {
     return false;
   }
 
-  const auto *Function = FunctionTemplateDeclaration->getAsFunction();
-
-  RequiresExpr = Function->getAsFunction()->getTrailingRequiresClause();
   RequiresToken =
-      findToken(Inputs.AST, Function->getSourceRange(), tok::kw_requires);
-
+      findToken(Inputs.AST, FunctionTemplateDeclaration->getSourceRange(),
+                tok::kw_requires);
   if (!RequiresToken) {
     return false;
   }
@@ -183,8 +181,9 @@ auto TransformConcept::generateRequiresReplacement(ASTContext &Context)
     -> std::variant<tooling::Replacement, llvm::Error> {
   auto &SourceManager = Context.getSourceManager();
 
-  auto RequiresRng = toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
-                                         RequiresExpr->getSourceRange());
+  auto RequiresRng =
+      toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
+                          ConceptSpecializationExpression->getSourceRange());
   if (!RequiresRng) {
     return error("Could not obtain range of the 'requires' branch. Macros?");
   }
@@ -257,12 +256,13 @@ auto TransformConcept::findNode(const SelectionTree::Node &Root)
     -> std::tuple<const T *, const SelectionTree::Node *> {
   const T *Result = nullptr;
 
-  const SelectionTree::Node *Node = &Root;
-  for (; Node && !Result; Node = Node->Parent) {
-    Result = dyn_cast_or_null<T>(Node->ASTNode.get<NodeKind>());
+  for (const auto *Node = &Root; Node; Node = Node->Parent) {
+    if ((Result = dyn_cast_or_null<T>(Node->ASTNode.get<NodeKind>()))) {
+      return {Result, Node};
+    }
   }
 
-  return {Result, Node};
+  return {};
 }
 
 } // namespace
