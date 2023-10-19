@@ -188,16 +188,16 @@ auto InlineConceptRequirement::generateRequiresReplacement(ASTContext &Context)
     -> std::variant<tooling::Replacement, llvm::Error> {
   auto &SourceManager = Context.getSourceManager();
 
-  auto RequiresRng =
+  auto RequiresRange =
       toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
                           ConceptSpecializationExpression->getSourceRange());
-  if (!RequiresRng) {
+  if (!RequiresRange) {
     return error("Could not obtain range of the 'requires' branch. Macros?");
   }
 
-  auto RequiresCode = toSourceCode(SourceManager, *RequiresRng);
+  auto RequiresCode = toSourceCode(SourceManager, *RequiresRange);
 
-  return tooling::Replacement(SourceManager, RequiresRng->getBegin(),
+  return tooling::Replacement(SourceManager, RequiresRange->getBegin(),
                               RequiresCode.size(), "");
 }
 
