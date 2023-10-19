@@ -74,22 +74,19 @@ private:
 REGISTER_TWEAK(InlineConceptRequirement)
 
 bool InlineConceptRequirement::prepare(const Selection &Inputs) {
-  if (!Inputs.AST->getLangOpts().CPlusPlus20) {
+  if (!Inputs.AST->getLangOpts().CPlusPlus20)
     return false;
-  }
 
   const auto *Root = Inputs.ASTSelection.commonAncestor();
-  if (!Root) {
+  if (!Root)
     return false;
-  }
 
   const SelectionTree::Node *ConceptSpecializationExpressionTreeNode;
   std::tie(ConceptSpecializationExpression,
            ConceptSpecializationExpressionTreeNode) =
       findExpression<ConceptSpecializationExpr>(*Root);
-  if (!ConceptSpecializationExpression) {
+  if (!ConceptSpecializationExpression)
     return false;
-  }
 
   // Only allow concepts that are direct children of function template
   // declarations or function declarations. This excludes conjunctions of
@@ -97,41 +94,35 @@ bool InlineConceptRequirement::prepare(const Selection &Inputs) {
   const auto *ParentDeclaration =
       ConceptSpecializationExpressionTreeNode->Parent->ASTNode.get<Decl>();
   if (!isa_and_nonnull<FunctionTemplateDecl>(ParentDeclaration) &&
-      !isa_and_nonnull<FunctionDecl>(ParentDeclaration)) {
+      !isa_and_nonnull<FunctionDecl>(ParentDeclaration))
     return false;
-  }
 
   const FunctionTemplateDecl *FunctionTemplateDeclaration =
       std::get<0>(findDeclaration<FunctionTemplateDecl>(*Root));
-  if (!FunctionTemplateDeclaration) {
+  if (!FunctionTemplateDeclaration)
     return false;
-  }
 
   auto TemplateArguments =
       ConceptSpecializationExpression->getTemplateArguments();
-  if (TemplateArguments.size() != 1) {
+  if (TemplateArguments.size() != 1)
     return false;
-  }
 
   auto TemplateParameterIndex =
       getTemplateParameterIndexOfTemplateArgument(TemplateArguments[0]);
-  if (!TemplateParameterIndex) {
+  if (!TemplateParameterIndex)
     return false;
-  }
 
   TemplateTypeParameterDeclaration = dyn_cast_or_null<TemplateTypeParmDecl>(
       FunctionTemplateDeclaration->getTemplateParameters()->getParam(
           *TemplateParameterIndex));
-  if (!TemplateTypeParameterDeclaration->wasDeclaredWithTypename()) {
+  if (!TemplateTypeParameterDeclaration->wasDeclaredWithTypename())
     return false;
-  }
 
   RequiresToken =
       findToken(Inputs.AST, FunctionTemplateDeclaration->getSourceRange(),
                 tok::kw_requires);
-  if (!RequiresToken) {
+  if (!RequiresToken)
     return false;
-  }
 
   return true;
 }
@@ -144,25 +135,21 @@ InlineConceptRequirement::apply(const Selection &Inputs) {
   tooling::Replacements Replacements{};
 
   if (auto Err =
-          Replacements.add(generateTemplateParameterReplacement(Context))) {
+          Replacements.add(generateTemplateParameterReplacement(Context)))
     return Err;
-  }
 
   auto RequiresReplacement = generateRequiresReplacement(Context);
 
-  if (std::holds_alternative<llvm::Error>(RequiresReplacement)) {
+  if (std::holds_alternative<llvm::Error>(RequiresReplacement))
     return std::move(std::get<llvm::Error>(RequiresReplacement));
-  }
 
   if (auto Err = Replacements.add(
-          std::get<tooling::Replacement>(RequiresReplacement))) {
+          std::get<tooling::Replacement>(RequiresReplacement)))
     return Err;
-  }
 
   if (auto Err =
-          Replacements.add(generateRequiresTokenReplacement(TokenBuffer))) {
+          Replacements.add(generateRequiresTokenReplacement(TokenBuffer)))
     return Err;
-  }
 
   return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
@@ -191,9 +178,8 @@ auto InlineConceptRequirement::generateRequiresReplacement(ASTContext &Context)
   auto RequiresRange =
       toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
                           ConceptSpecializationExpression->getSourceRange());
-  if (!RequiresRange) {
+  if (!RequiresRange)
     return error("Could not obtain range of the 'requires' branch. Macros?");
-  }
 
   auto RequiresCode = toSourceCode(SourceManager, *RequiresRange);
 
@@ -248,11 +234,10 @@ auto clang::clangd::InlineConceptRequirement::findToken(
     return Token.kind() == TokenKind;
   };
 
-  const auto It = std::find_if(Tokens.begin(), Tokens.end(), Predicate);
+  const auto *It = std::find_if(Tokens.begin(), Tokens.end(), Predicate);
 
-  if (It == Tokens.end()) {
+  if (It == Tokens.end())
     return nullptr;
-  }
 
   return It;
 }
@@ -262,9 +247,8 @@ auto InlineConceptRequirement::findNode(const SelectionTree::Node &Root)
     -> std::tuple<const T *, const SelectionTree::Node *> {
 
   for (const auto *Node = &Root; Node; Node = Node->Parent) {
-    if (const T *Result = dyn_cast_or_null<T>(Node->ASTNode.get<NodeKind>())) {
+    if (const T *Result = dyn_cast_or_null<T>(Node->ASTNode.get<NodeKind>()))
       return {Result, Node};
-    }
   }
 
   return {};
