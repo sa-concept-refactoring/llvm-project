@@ -248,7 +248,7 @@ auto clang::clangd::InlineConceptRequirement::findToken(
     return Token.kind() == TokenKind;
   };
 
-  const auto *const It = std::find_if(Tokens.begin(), Tokens.end(), Predicate);
+  auto It = std::find_if(Tokens.begin(), Tokens.end(), Predicate);
 
   if (It == Tokens.end()) {
     return nullptr;
@@ -260,10 +260,9 @@ auto clang::clangd::InlineConceptRequirement::findToken(
 template <typename T, typename NodeKind>
 auto InlineConceptRequirement::findNode(const SelectionTree::Node &Root)
     -> std::tuple<const T *, const SelectionTree::Node *> {
-  const T *Result = nullptr;
 
   for (const auto *Node = &Root; Node; Node = Node->Parent) {
-    if ((Result = dyn_cast_or_null<T>(Node->ASTNode.get<NodeKind>()))) {
+    if (const T *Result = dyn_cast_or_null<T>(Node->ASTNode.get<NodeKind>())) {
       return {Result, Node};
     }
   }
