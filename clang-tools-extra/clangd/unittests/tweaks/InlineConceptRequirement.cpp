@@ -41,6 +41,10 @@ TEST_F(InlineConceptRequirementTest, Test) {
       apply("template <typename T, typename U> requires foo<^T> void f(T) {}"),
       "template <foo T, typename U>   void f(T) {}");
 
+  EXPECT_EQ(
+      apply("template <template <typename> class FooBar, typename T> void f() requires foo<^T> {}"),
+      "template <template <typename> class FooBar, foo T> void f()   {}");
+
   EXPECT_AVAILABLE(R"cpp(
       template <typename T> void f(T)
         requires ^f^o^o^<^T^> {}
@@ -56,6 +60,12 @@ TEST_F(InlineConceptRequirementTest, Test) {
         requires ^f^o^o^<^T^> {}
     )cpp");
 
+  EXPECT_AVAILABLE(R"cpp(
+      template <template <typename> class FooBar, typename T>
+      void foobar() requires ^f^o^o^<^T^>^
+      {}
+    )cpp");
+
   EXPECT_UNAVAILABLE(R"cpp(
       template <bar T> void f(T)
         requires ^f^o^o^<^T^> {}
@@ -69,6 +79,13 @@ TEST_F(InlineConceptRequirementTest, Test) {
   EXPECT_UNAVAILABLE(R"cpp(
       template <typename T> void f(T)
         requires ^f^o^o^<^T^>^ ^&^&^ ^b^a^r^<^T^> {}
+    )cpp");
+
+  EXPECT_UNAVAILABLE(R"cpp(
+      template <typename T>
+      concept ^f^o^o^b^a^r = requires(^T^ ^x^) {
+        {x} -> ^f^o^o^;
+      };
     )cpp");
 }
 
