@@ -74,6 +74,7 @@ private:
 REGISTER_TWEAK(InlineConceptRequirement)
 
 bool InlineConceptRequirement::prepare(const Selection &Inputs) {
+  // Check if C++ version is 20 or higher
   if (!Inputs.AST->getLangOpts().CPlusPlus20)
     return false;
 
@@ -234,7 +235,7 @@ auto clang::clangd::InlineConceptRequirement::findToken(
     return Token.kind() == TokenKind;
   };
 
-  const auto *It = std::find_if(Tokens.begin(), Tokens.end(), Predicate);
+  auto It = std::find_if(Tokens.begin(), Tokens.end(), Predicate);
 
   if (It == Tokens.end())
     return nullptr;
