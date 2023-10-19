@@ -145,7 +145,7 @@ InlineConceptRequirement::apply(const Selection &Inputs) {
 
   if (auto Err =
           Replacements.add(generateTemplateParameterReplacement(Context))) {
-    return std::move(Err);
+    return Err;
   }
 
   auto RequiresReplacement = generateRequiresReplacement(Context);
@@ -156,12 +156,12 @@ InlineConceptRequirement::apply(const Selection &Inputs) {
 
   if (auto Err = Replacements.add(
           std::get<tooling::Replacement>(RequiresReplacement))) {
-    return std::move(Err);
+    return Err;
   }
 
   if (auto Err =
           Replacements.add(generateRequiresTokenReplacement(TokenBuffer))) {
-    return std::move(Err);
+    return Err;
   }
 
   return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
@@ -248,7 +248,7 @@ auto clang::clangd::InlineConceptRequirement::findToken(
     return Token.kind() == TokenKind;
   };
 
-  auto It = std::find_if(Tokens.begin(), Tokens.end(), Predicate);
+  const auto It = std::find_if(Tokens.begin(), Tokens.end(), Predicate);
 
   if (It == Tokens.end()) {
     return nullptr;
