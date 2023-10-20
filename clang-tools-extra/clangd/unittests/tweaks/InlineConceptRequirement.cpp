@@ -41,9 +41,9 @@ TEST_F(InlineConceptRequirementTest, Test) {
       apply("template <typename T, typename U> requires foo<^T> void f(T) {}"),
       "template <foo T, typename U>   void f(T) {}");
 
-  EXPECT_EQ(
-      apply("template <template <typename> class FooBar, typename T> void f() requires foo<^T> {}"),
-      "template <template <typename> class FooBar, foo T> void f()   {}");
+  EXPECT_EQ(apply("template <template <typename> class FooBar, typename T>"
+                  "void f() requires foo<^T> {}"),
+            "template <template <typename> class FooBar, foo T> void f()   {}");
 
   EXPECT_AVAILABLE(R"cpp(
       template <typename T> void f(T)
