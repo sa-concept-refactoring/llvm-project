@@ -73,7 +73,7 @@ private:
 
 REGISTER_TWEAK(InlineConceptRequirement)
 
-bool InlineConceptRequirement::prepare(const Selection &Inputs) {
+auto InlineConceptRequirement::prepare(const Selection &Inputs) -> bool {
   // Check if C++ version is 20 or higher
   if (!Inputs.AST->getLangOpts().CPlusPlus20)
     return false;
@@ -128,8 +128,8 @@ bool InlineConceptRequirement::prepare(const Selection &Inputs) {
   return true;
 }
 
-Expected<Tweak::Effect>
-InlineConceptRequirement::apply(const Selection &Inputs) {
+auto InlineConceptRequirement::apply(const Selection &Inputs)
+    -> Expected<Tweak::Effect> {
   auto &Context = Inputs.AST->getASTContext();
   auto &TokenBuffer = Inputs.AST->getTokens();
 
@@ -144,8 +144,8 @@ InlineConceptRequirement::apply(const Selection &Inputs) {
   if (std::holds_alternative<llvm::Error>(RequiresReplacement))
     return std::move(std::get<llvm::Error>(RequiresReplacement));
 
-  if (auto Err = Replacements.add(
-          std::get<tooling::Replacement>(RequiresReplacement)))
+  if (auto Err =
+          Replacements.add(std::get<tooling::Replacement>(RequiresReplacement)))
     return Err;
 
   if (auto Err =
