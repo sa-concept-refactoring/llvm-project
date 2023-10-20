@@ -30,10 +30,12 @@ class InlineConceptRequirement : public Tweak {
 public:
   const char *id() const final;
 
-  bool prepare(const Selection &Inputs) override;
-  Expected<Effect> apply(const Selection &Inputs) override;
-  std::string title() const override { return "Inline concept requirement"; }
-  llvm::StringLiteral kind() const override {
+  auto prepare(const Selection &Inputs) -> bool override;
+  auto apply(const Selection &Inputs) -> Expected<Effect> override;
+  auto title() const -> std::string override {
+    return "Inline concept requirement";
+  }
+  auto kind() const -> llvm::StringLiteral override {
     return CodeAction::REFACTOR_KIND;
   }
 
