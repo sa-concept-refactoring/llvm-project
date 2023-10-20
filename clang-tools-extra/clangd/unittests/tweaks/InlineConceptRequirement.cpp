@@ -62,7 +62,7 @@ TEST_F(InlineConceptRequirementTest, Test) {
 
   EXPECT_AVAILABLE(R"cpp(
       template <template <typename> class FooBar, typename T>
-      void foobar() requires ^f^o^o^<^T^>^
+      void foobar() requires ^f^o^o^<^T^>
       {}
     )cpp");
 
