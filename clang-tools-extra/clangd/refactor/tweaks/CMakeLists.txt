@@ -17,6 +17,7 @@ add_clang_library(clangDaemonTweaks OBJECT
   DumpAST.cpp
   DefineInline.cpp
   DefineOutline.cpp
+  ConvertToAutoParameter.cpp
   ExpandDeducedType.cpp
   ExpandMacro.cpp
   ExtractFunction.cpp
