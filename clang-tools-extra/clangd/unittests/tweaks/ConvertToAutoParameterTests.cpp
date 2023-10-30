@@ -15,7 +15,7 @@ namespace {
 
 TWEAK_TEST(ConvertToAutoParameter);
 
-TEST_F(ConvertToAutoParameterTests, Test) {
+TEST_F(ConvertToAutoParameterTest, Test) {
   Context = Function;
 
   Header = R"cpp(
