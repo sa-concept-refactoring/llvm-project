@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "AST.h"
+#include "FindTarget.h"
 #include "SourceCode.h"
 #include "refactor/Tweak.h"
 #include "llvm/ADT/StringRef.h"
@@ -64,20 +65,51 @@ bool ConvertToAutoParameter::prepare(const Selection &Inputs) {
   auto *TemplateParameters = FunctionTemplateDeclaration->getTemplateParameters();
 
   for (auto *TemplateParameter : *TemplateParameters) {
+    auto *Foo = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
+    if (!Foo)
+      return false;
+
+    auto TemplateParameterSymbolID = getSymbolID(Foo);
+
     RefsRequest ReferenceRequest{};
-    ReferenceRequest.IDs.insert(getSymbolID(TemplateParameter));
+    ReferenceRequest.IDs.insert(TemplateParameterSymbolID);
+//    ReferenceRequest.Filter = RefKind::Reference;
+    ReferenceRequest.Limit = 1;
+//    ReferenceRequest.Filter = RefKind::Reference;
 
-    Inputs.Index->refs(ReferenceRequest, [](Ref Reference) {
-      if (Reference.Kind != RefKind::Declaration) {
-        // Check if type parameters are only used once
+    std::vector<Ref> References{};
 
-
-        // Check if the only usage is a function parameter
-
-
-        // Check if the function parameter is a simple value parameter
-      }
+    Inputs.Index->refs(ReferenceRequest, [&](auto Reference) {
+      References.push_back(Reference);
     });
+
+    // Check if type parameters are only used once
+    if (References.size() == 1) {
+//      return false;
+    }
+
+    // Check if the only usage is a function parameter
+    auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
+
+    auto Found = false;
+    for (auto *Parameter : Parameters) {
+//      QualType Type = Parameter->getType();
+//      if (!Type->isTemplateTypeParmType())
+//        return false;
+
+//      Parameter->getType();
+////
+//      if (getSymbolID(Parameter->getOriginalType()) == TemplateParameterSymbolID) {
+//        Found = true;
+//        break;
+//      }
+    }
+
+//    if (!Found)
+//      return false;
+
+
+    // Check if the function parameter is a simple value parameter
   }
 
   return true;
