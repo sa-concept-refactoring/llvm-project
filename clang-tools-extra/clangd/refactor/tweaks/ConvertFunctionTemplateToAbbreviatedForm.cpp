@@ -17,6 +17,7 @@
 #include "clang/AST/ExprConcepts.h"
 #include "clang/Tooling/Core/Replacement.h"
 #include "llvm/Support/Casting.h"
+#include "XRefs.h"
 
 namespace clang {
 namespace clangd {
@@ -73,36 +74,30 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
   if (!Root)
     return false;
 
-  // Function template containing `requires`
-  auto *ConceptSpecializationExpression = findExpression<ConceptSpecializationExpr>(*Root);
-
-  if (ConceptSpecializationExpression)
-    return false;
-
   FunctionTemplateDeclaration = findDeclaration<FunctionTemplateDecl>(*Root);
   if (!FunctionTemplateDeclaration)
     return false;
 
   // Get all function template type parameters
   auto *TemplateParameters = FunctionTemplateDeclaration->getTemplateParameters();
-  auto &Ctx = Inputs.AST->getASTContext();
 
   for (auto *TemplateParameter : *TemplateParameters) {
-    RefsRequest ReferenceRequest{};
-    ReferenceRequest.IDs.insert(getSymbolID(TemplateParameter));
+    // Check if type parameters is only used once
+    auto TemplateParameterPosition = sourceLocToPosition(Inputs.AST->getSourceManager(), TemplateParameter->getEndLoc());
+    auto ReferencesResult = findReferences(*Inputs.AST, TemplateParameterPosition, 3, Inputs.Index);
 
-    Inputs.Index->refs(ReferenceRequest, [&](Ref Reference) {
-      if (Reference.Kind != RefKind::Declaration) {
+    // This refactoring only works if there are exactly two references to the
+    // type parameter. The first one is the declaration, the second one its
+    // usage as a parameter type.
+    if (ReferencesResult.References.size() != 2) {
+      return false;
+    }
 
-        // Check if type parameters are only used once
+    // Check if the only usage is a function parameter
 
 
-        // Check if the only usage is a function parameter
+    // Check if the function parameter is a simple value parameter
 
-
-        // Check if the function parameter is a simple value parameter
-      }
-    });
   }
 
   return true;
