@@ -116,7 +116,7 @@ add_unittest(ClangdUnitTests ClangdTests
 
   tweaks/AddUsingTests.cpp
   tweaks/AnnotateHighlightingsTests.cpp
-  tweaks/ConvertToAutoParameterTests.cpp
+  tweaks/ConvertFunctionTemplateToAbbreviatedFormTests.cpp
   tweaks/DefineInlineTests.cpp
   tweaks/DefineOutlineTests.cpp
   tweaks/DumpASTTests.cpp

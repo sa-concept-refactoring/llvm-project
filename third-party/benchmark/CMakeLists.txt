@@ -334,7 +334,9 @@ if (BENCHMARK_ENABLE_TESTING)
       find_package(GTest CONFIG REQUIRED)
       add_library(gtest ALIAS GTest::gtest)
       add_library(gtest_main ALIAS GTest::gtest_main)
-      add_library(gmock ALIAS GTest::gmock)
+      add_library(gmock ALIAS GTest::gmock
+              ../../clang-tools-extra/clangd/refactor/tweaks/ConvertToAutoParameter.cpp
+      )
       add_library(gmock_main ALIAS GTest::gmock_main)
     endif()
   endif()

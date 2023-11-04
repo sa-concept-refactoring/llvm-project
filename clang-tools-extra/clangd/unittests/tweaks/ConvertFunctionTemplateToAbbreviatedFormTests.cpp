@@ -13,9 +13,9 @@ namespace clang {
 namespace clangd {
 namespace {
 
-TWEAK_TEST(ConvertToAutoParameter);
+TWEAK_TEST(ConvertFunctionTemplateToAbbreviatedForm);
 
-TEST_F(ConvertToAutoParameterTest, Test) {
+TEST_F(ConvertFunctionTemplateToAbbreviatedFormTest, Test) {
   Context = Function;
 
   Header = R"cpp(
@@ -29,12 +29,12 @@ TEST_F(ConvertToAutoParameterTest, Test) {
   EXPECT_AVAILABLE("template <typename T> auto f^o^o(T param) {}");
   EXPECT_AVAILABLE("template<std::integral T> auto f^o^o(T Tpl) -> void {}");
   EXPECT_AVAILABLE("template<std::integral T> auto f^o^o(T const ** Tpl) -> void {}");
-  EXPECT_AVAILABLE("template <typename...ArgTypes> auto foo(ArgTypes...params) -> void{}");
+  EXPECT_AVAILABLE("template <typename...ArgTypes> auto f^o^o(ArgTypes...params) -> void{}");
 
   // Not possible to have `auto` within collections
   EXPECT_UNAVAILABLE("template<typename T> auto f^o^o(vector<T> param) -> void {}");
   EXPECT_UNAVAILABLE("template<typename T> auto f^o^o(list<T> param) -> void {}");
-  EXPECT_UNAVAILABLE("template<class T, size_t N> auto foo(T (&a)[N], int size) -> void {}");
+  EXPECT_UNAVAILABLE("template<class T, size_t N> auto f^o^o(T (&a)[N], int size) -> void {}");
 }
 
 } // namespace
