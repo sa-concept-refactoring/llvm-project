@@ -53,23 +53,38 @@ private:
 REGISTER_TWEAK(ConvertToAutoParameter)
 
 bool ConvertToAutoParameter::prepare(const Selection &Inputs) {
+
+  return true;
+}
+
+Expected<Tweak::Effect> ConvertToAutoParameter::apply(const Selection &Inputs) {
   const auto *Root = Inputs.ASTSelection.commonAncestor();
-  if (!Root)
-    return false;
+//  if (!Root)
+//    return;
 
   const auto *FunctionTemplateDeclaration = findDeclaration<FunctionTemplateDecl>(*Root);
-  if (!FunctionTemplateDeclaration)
-    return false;
+//  if (!FunctionTemplateDeclaration)
+//    return;
+
+  auto path = Inputs.AST->tuPath();
+  auto aaaaarg = Inputs.Index->indexedFiles()(path);
 
   // Get all function template type parameters
   auto *TemplateParameters = FunctionTemplateDeclaration->getTemplateParameters();
+//  auto *TemplateParameters = FunctionTemplateDeclaration->getDescribedTemplateParams();
+//  auto *TemplateParameters = FunctionTemplateDeclaration
+
+//  FunctionTemplateDeclaration->getDescribedTemplateParams();
 
   for (auto *TemplateParameter : *TemplateParameters) {
-    auto *Foo = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
-    if (!Foo)
-      return false;
+//    auto *Foo = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
+//    if (!Foo)
+//      return false;
+//
 
-    auto TemplateParameterSymbolID = getSymbolID(Foo);
+    findExplicitReferences(TemplateParameter, )
+
+    auto TemplateParameterSymbolID = getSymbolID(FunctionTemplateDeclaration);
 
     RefsRequest ReferenceRequest{};
     ReferenceRequest.IDs.insert(TemplateParameterSymbolID);
@@ -79,8 +94,22 @@ bool ConvertToAutoParameter::prepare(const Selection &Inputs) {
 
     std::vector<Ref> References{};
 
-    Inputs.Index->refs(ReferenceRequest, [&](auto Reference) {
+    bool bar = Inputs.Index->refs(ReferenceRequest, [&](auto Reference) {
       References.push_back(Reference);
+    });
+
+    LookupRequest LookupRequest{};
+    LookupRequest.IDs.insert(TemplateParameterSymbolID);
+
+    Inputs.Index->lookup(LookupRequest, [&](auto Reference) {
+      auto foo = Reference;
+    });
+
+    RelationsRequest RelationsRequest{};
+    RelationsRequest.Subjects.insert(TemplateParameterSymbolID);
+
+    Inputs.Index->relations(RelationsRequest, [&](auto a, auto b) {
+      auto xyz = a;
     });
 
     // Check if type parameters are only used once
@@ -112,10 +141,6 @@ bool ConvertToAutoParameter::prepare(const Selection &Inputs) {
     // Check if the function parameter is a simple value parameter
   }
 
-  return true;
-}
-
-Expected<Tweak::Effect> ConvertToAutoParameter::apply(const Selection &Inputs) {
   return Effect::showMessage("");
 }
 
