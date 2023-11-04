@@ -11,6 +11,8 @@
 #include "refactor/Tweak.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
+#include "HeuristicResolver.h"
+#include "XRefs.h"
 
 namespace clang {
 namespace clangd {
@@ -53,93 +55,118 @@ private:
 REGISTER_TWEAK(ConvertToAutoParameter)
 
 bool ConvertToAutoParameter::prepare(const Selection &Inputs) {
+  const auto *Root = Inputs.ASTSelection.commonAncestor();
+  if (!Root)
+    return false;
+
+  const auto *FunctionTemplateDeclaration =
+      findDeclaration<FunctionTemplateDecl>(*Root);
+
+//  HeuristicResolver HeuristicResolver{FunctionTemplateDeclaration->getASTContext()};
+
+  auto *TemplateParameters =
+      FunctionTemplateDeclaration->getTemplateParameters();
+
+  for (auto *TemplateParameter : *TemplateParameters) {
+    auto Pos = sourceLocToPosition(Inputs.AST->getSourceManager(), TemplateParameter->getEndLoc());
+    auto Result = findReferences(*Inputs.AST, Pos, 10, Inputs.Index, false);
+
+    auto foo = Result.References.size();
+    auto bar = "yay";
+
+//    findExplicitReferences(
+//        TemplateParameter, [&](auto Reference) {
+//          auto foo = Reference;
+//        },
+//        &HeuristicResolver);
+  }
 
   return true;
 }
 
 Expected<Tweak::Effect> ConvertToAutoParameter::apply(const Selection &Inputs) {
-  const auto *Root = Inputs.ASTSelection.commonAncestor();
-//  if (!Root)
-//    return;
-
-  const auto *FunctionTemplateDeclaration = findDeclaration<FunctionTemplateDecl>(*Root);
-//  if (!FunctionTemplateDeclaration)
-//    return;
-
-  auto path = Inputs.AST->tuPath();
-  auto aaaaarg = Inputs.Index->indexedFiles()(path);
-
-  // Get all function template type parameters
-  auto *TemplateParameters = FunctionTemplateDeclaration->getTemplateParameters();
-//  auto *TemplateParameters = FunctionTemplateDeclaration->getDescribedTemplateParams();
-//  auto *TemplateParameters = FunctionTemplateDeclaration
-
-//  FunctionTemplateDeclaration->getDescribedTemplateParams();
-
-  for (auto *TemplateParameter : *TemplateParameters) {
-//    auto *Foo = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
-//    if (!Foo)
-//      return false;
+//  const auto *Root = Inputs.ASTSelection.commonAncestor();
+////  if (!Root)
+////    return;
 //
-
-    findExplicitReferences(TemplateParameter, )
-
-    auto TemplateParameterSymbolID = getSymbolID(FunctionTemplateDeclaration);
-
-    RefsRequest ReferenceRequest{};
-    ReferenceRequest.IDs.insert(TemplateParameterSymbolID);
-//    ReferenceRequest.Filter = RefKind::Reference;
-    ReferenceRequest.Limit = 1;
-//    ReferenceRequest.Filter = RefKind::Reference;
-
-    std::vector<Ref> References{};
-
-    bool bar = Inputs.Index->refs(ReferenceRequest, [&](auto Reference) {
-      References.push_back(Reference);
-    });
-
-    LookupRequest LookupRequest{};
-    LookupRequest.IDs.insert(TemplateParameterSymbolID);
-
-    Inputs.Index->lookup(LookupRequest, [&](auto Reference) {
-      auto foo = Reference;
-    });
-
-    RelationsRequest RelationsRequest{};
-    RelationsRequest.Subjects.insert(TemplateParameterSymbolID);
-
-    Inputs.Index->relations(RelationsRequest, [&](auto a, auto b) {
-      auto xyz = a;
-    });
-
-    // Check if type parameters are only used once
-    if (References.size() == 1) {
-//      return false;
-    }
-
-    // Check if the only usage is a function parameter
-    auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
-
-    auto Found = false;
-    for (auto *Parameter : Parameters) {
-//      QualType Type = Parameter->getType();
-//      if (!Type->isTemplateTypeParmType())
-//        return false;
-
-//      Parameter->getType();
+//  const auto *FunctionTemplateDeclaration = findDeclaration<FunctionTemplateDecl>(*Root);
+////  if (!FunctionTemplateDeclaration)
+////    return;
+//
+//  auto path = Inputs.AST->tuPath();
+//  auto aaaaarg = Inputs.Index->indexedFiles()(path);
+//
+//  // Get all function template type parameters
+//  auto *TemplateParameters = FunctionTemplateDeclaration->getTemplateParameters();
+////  auto *TemplateParameters = FunctionTemplateDeclaration->getDescribedTemplateParams();
+////  auto *TemplateParameters = FunctionTemplateDeclaration
+//
+////  FunctionTemplateDeclaration->getDescribedTemplateParams();
+//
+//  for (auto *TemplateParameter : *TemplateParameters) {
+////    auto *Foo = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
+////    if (!Foo)
+////      return false;
 ////
-//      if (getSymbolID(Parameter->getOriginalType()) == TemplateParameterSymbolID) {
-//        Found = true;
-//        break;
-//      }
-    }
-
-//    if (!Found)
-//      return false;
-
-
-    // Check if the function parameter is a simple value parameter
-  }
+//
+//    findExplicitReferences(TemplateParameter, )
+//
+//    auto TemplateParameterSymbolID = getSymbolID(FunctionTemplateDeclaration);
+//
+//    RefsRequest ReferenceRequest{};
+//    ReferenceRequest.IDs.insert(TemplateParameterSymbolID);
+////    ReferenceRequest.Filter = RefKind::Reference;
+//    ReferenceRequest.Limit = 1;
+////    ReferenceRequest.Filter = RefKind::Reference;
+//
+//    std::vector<Ref> References{};
+//
+//    bool bar = Inputs.Index->refs(ReferenceRequest, [&](auto Reference) {
+//      References.push_back(Reference);
+//    });
+//
+//    LookupRequest LookupRequest{};
+//    LookupRequest.IDs.insert(TemplateParameterSymbolID);
+//
+//    Inputs.Index->lookup(LookupRequest, [&](auto Reference) {
+//      auto foo = Reference;
+//    });
+//
+//    RelationsRequest RelationsRequest{};
+//    RelationsRequest.Subjects.insert(TemplateParameterSymbolID);
+//
+//    Inputs.Index->relations(RelationsRequest, [&](auto a, auto b) {
+//      auto xyz = a;
+//    });
+//
+//    // Check if type parameters are only used once
+//    if (References.size() == 1) {
+////      return false;
+//    }
+//
+//    // Check if the only usage is a function parameter
+//    auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
+//
+//    auto Found = false;
+//    for (auto *Parameter : Parameters) {
+////      QualType Type = Parameter->getType();
+////      if (!Type->isTemplateTypeParmType())
+////        return false;
+//
+////      Parameter->getType();
+//////
+////      if (getSymbolID(Parameter->getOriginalType()) == TemplateParameterSymbolID) {
+////        Found = true;
+////        break;
+////      }
+//    }
+//
+////    if (!Found)
+////      return false;
+//
+//
+//    // Check if the function parameter is a simple value parameter
+//  }
 
   return Effect::showMessage("");
 }
