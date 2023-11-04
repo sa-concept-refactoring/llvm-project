@@ -75,21 +75,27 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
   if (!FunctionTemplateDeclaration)
     return false;
 
-  // TODO: Check if there are existing auto parameters. This case we don't support for now.
-
   // Get all function template type parameters
   auto *TemplateParameters = FunctionTemplateDeclaration->getTemplateParameters();
+  if (TemplateParameters->size() == 0)
+    // In this case we can just remove the empty "template<>" block.
+    // TODO: Check if this makes any sense
+    return true;
 
   for (auto *TemplateParameter : *TemplateParameters) {
     // Check if type parameters is only used once
     auto TemplateParameterPosition = sourceLocToPosition(Inputs.AST->getSourceManager(), TemplateParameter->getEndLoc());
     auto ReferencesResult = findReferences(*Inputs.AST, TemplateParameterPosition, 3, Inputs.Index);
 
+    // TODO: Check if the parameter is an auto parameter. If so, return false.
+    // We could support this case, but I don't want to deal with this atm.
+    auto TypeParam = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
+
     // This refactoring only works if there are exactly two references to the
     // type parameter. The first one is the declaration, the second one its
     // usage as a parameter type.
     if (ReferencesResult.References.size() != 2) {
-      return false;
+//      return false;
     }
 
     // TODO: Check if the only usage is a function parameter
@@ -97,6 +103,14 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
 
     // TODO: Check if the function parameter is a simple value parameter
 
+  }
+
+  auto CurrentTemplateParameterBeingChecked = &TemplateParameters[0];
+
+  for (auto parameter : FunctionTemplateDeclaration->getAsFunction()->parameters()) {
+    if (parameter->getOriginalType()->isUndeducedAutoType()) {
+      auto brah = "";
+    }
   }
 
   return true;
