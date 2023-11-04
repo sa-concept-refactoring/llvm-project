@@ -44,9 +44,6 @@ private:
   //const TemplateTypeParmDecl *TemplateTypeParameterDeclaration;
   const FunctionTemplateDecl *FunctionTemplateDeclaration;
 
-  static auto getTemplateParameterIndexOfTemplateArgument(
-      const TemplateArgument &TemplateArgument) -> std::optional<int>;
-
   auto generateFunctionParameterReplacement(ASTContext &Context)
       -> llvm::Expected<tooling::Replacement>;
 
@@ -114,14 +111,14 @@ Expected<Tweak::Effect> ConvertFunctionTemplateToAbbreviatedForm::apply(const Se
   const auto *Root = Inputs.ASTSelection.commonAncestor();
 
   // Replace parameter type with `auto`
-  //  auto FunctionParameterReplacement =
-  //      generateFunctionParameterReplacement(Context);
-  //
-  //  if (auto Err = FunctionParameterReplacement.takeError())
-  //    return Err;
-  //
-  //  if (auto Err = Replacements.add(*FunctionParameterReplacement))
-  //    return Err;
+  auto FunctionParameterReplacement =
+      generateFunctionParameterReplacement(Context);
+
+  if (auto Err = FunctionParameterReplacement.takeError())
+    return Err;
+
+  if (auto Err = Replacements.add(*FunctionParameterReplacement))
+    return Err;
 
   // Remove template declaration
   auto TemplateDeclarationReplacement =
@@ -136,23 +133,6 @@ Expected<Tweak::Effect> ConvertFunctionTemplateToAbbreviatedForm::apply(const Se
   return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
 
-auto ConvertFunctionTemplateToAbbreviatedForm::getTemplateParameterIndexOfTemplateArgument(
-    const TemplateArgument &TemplateArgument) -> std::optional<int> {
-  if (TemplateArgument.getKind() != TemplateArgument.Type)
-    return {};
-
-  auto TemplateArgumentType = TemplateArgument.getAsType();
-  if (!TemplateArgumentType->isTemplateTypeParmType())
-    return {};
-
-  const auto *TemplateTypeParameterType =
-      TemplateArgumentType->getAs<TemplateTypeParmType>();
-  if (!TemplateTypeParameterType)
-    return {};
-
-  return TemplateTypeParameterType->getIndex();
-}
-
 template <typename T, typename NodeKind>
 auto ConvertFunctionTemplateToAbbreviatedForm::findNode(const SelectionTree::Node &Root) -> const T * {
   for (const auto *Node = &Root; Node; Node = Node->Parent) {
@@ -163,30 +143,35 @@ auto ConvertFunctionTemplateToAbbreviatedForm::findNode(const SelectionTree::Nod
   return nullptr;
 }
 
-auto ConvertFunctionTemplateToAbbreviatedForm::
-    generateFunctionParameterReplacement(
+auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacement(
     ASTContext &Context) -> llvm::Expected<tooling::Replacement> {
   auto &SourceManager = Context.getSourceManager();
 
   // Check if template parameters are present
   // TODO: loop through all
+  // TODO: Get type of each template type parameter
   auto *Parameter = FunctionTemplateDeclaration->getTemplatedDecl()->getParamDecl(0);
 
-  auto TemplateParameterReplacement = "auto ";
+  // TODO: Find reference
+  auto *Function = FunctionTemplateDeclaration->getAsFunction();
+  auto *FunctionParameter = Function->getParamDecl(0);
 
-  auto TemplateParameterRange =
+  // TODO: Replace reference with type + auto
+  auto FunctionTypeReplacementText = "auto " + std::string{Parameter->getDeclName().getAsString()};
+
+  auto FunctionParameterRange =
       toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
-                          Parameter->getSourceRange());
+                          FunctionParameter->getSourceRange());
 
-  if (!TemplateParameterRange)
+  if (!FunctionParameterRange)
     return error("Could not obtain range of the template parameter. Macros?");
 
   // Replaces `typename T` with `auto`
   // TODO: Replace `T` in `f(T param)` with auto
   return tooling::Replacement(
       SourceManager,
-      CharSourceRange::getCharRange(*TemplateParameterRange),
-      TemplateParameterReplacement);
+      CharSourceRange::getCharRange(*FunctionParameterRange),
+      FunctionTypeReplacementText);
 }
 
 auto ConvertFunctionTemplateToAbbreviatedForm::generateTemplateDeclarationReplacement(
