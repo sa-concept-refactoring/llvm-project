@@ -78,6 +78,8 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
   if (!FunctionTemplateDeclaration)
     return false;
 
+  // TODO: Check if there are existing auto parameters. This case we don't support for now.
+
   // Get all function template type parameters
   auto *TemplateParameters = FunctionTemplateDeclaration->getTemplateParameters();
 
@@ -93,10 +95,10 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
       return false;
     }
 
-    // Check if the only usage is a function parameter
+    // TODO: Check if the only usage is a function parameter
 
 
-    // Check if the function parameter is a simple value parameter
+    // TODO: Check if the function parameter is a simple value parameter
 
   }
 
