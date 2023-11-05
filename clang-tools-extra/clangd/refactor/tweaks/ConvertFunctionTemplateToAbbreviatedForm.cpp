@@ -44,6 +44,9 @@ private:
   //const TemplateTypeParmDecl *TemplateTypeParameterDeclaration;
   const FunctionTemplateDecl *FunctionTemplateDeclaration;
 
+  std::vector<const TypeConstraint*> TypeConstraints;
+  std::vector<unsigned int> ParameterIndices;
+
   auto generateFunctionParameterReplacement(ASTContext &Context)
       -> llvm::Expected<tooling::Replacement>;
 
@@ -93,6 +96,9 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
     // - more than two: The template parameter was either used for multiple
     //                  parameters or somewhere else in the function.
 
+    auto *TemplateParameterDeclaration = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
+    TypeConstraints.push_back(TemplateParameterDeclaration->getTypeConstraint());
+
     auto TemplateParameterPosition = sourceLocToPosition(Inputs.AST->getSourceManager(), TemplateParameter->getEndLoc());
     auto ReferencesResult = findReferences(*Inputs.AST, TemplateParameterPosition, 3, Inputs.Index);
 
@@ -103,14 +109,16 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
 
   auto CurrentTemplateParameterBeingChecked = 0u;
 
-  for (auto *Parameter : FunctionTemplateDeclaration->getAsFunction()->parameters()) {
-    auto Type = Parameter->getType();
+  auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
+  for (auto ParameterIndex = 0u; ParameterIndex < Parameters.size(); ParameterIndex++) {
+    auto Type = Parameters[ParameterIndex]->getType();
     if (!Type->isTemplateTypeParmType())
       continue;
 
     const auto *TemplateTypeParameterType = dyn_cast_or_null<TemplateTypeParmType>(Type);
     if (TemplateTypeParameterType->getIndex() == CurrentTemplateParameterBeingChecked) {
       CurrentTemplateParameterBeingChecked += 1;
+      ParameterIndices.push_back(ParameterIndex);
     } else {
       return false;
     }
