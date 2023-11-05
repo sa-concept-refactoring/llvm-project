@@ -75,43 +75,53 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
   if (!FunctionTemplateDeclaration)
     return false;
 
-  // Get all function template type parameters
   auto *TemplateParameters = FunctionTemplateDeclaration->getTemplateParameters();
   if (TemplateParameters->size() == 0)
-    // In this case we can just remove the empty "template<>" block.
-    // TODO: Check if this makes any sense
-    return true;
+    // TODO: Investigate if we could handle empty templates easily.
+    return false;
 
   for (auto *TemplateParameter : *TemplateParameters) {
-    // Check if type parameters is only used once
+    // TODO: Make this comment more clear
+    // For each template parameter we check how many times it is referenced.
+    // Depending on the number of references we know a few more things.
+    // If there is
+    // - exactly one: The template parameter was declared but never used, which
+    //                means we know for sure it doesn't appear as a parameter.
+    // - exactly two: The template parameter was used exactly once, either as a
+    //                parameter or somewhere else. This is the case we are
+    //                interested in.
+    // - more than two: The template parameter was either used for multiple
+    //                  parameters or somewhere else in the function.
+
     auto TemplateParameterPosition = sourceLocToPosition(Inputs.AST->getSourceManager(), TemplateParameter->getEndLoc());
     auto ReferencesResult = findReferences(*Inputs.AST, TemplateParameterPosition, 3, Inputs.Index);
 
-    // TODO: Check if the parameter is an auto parameter. If so, return false.
-    // We could support this case, but I don't want to deal with this atm.
-    auto TypeParam = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
+    // TODO: Check if the parameter is an auto parameter. If so, return false. We could support this case, but I don't want to deal with this atm.
 
-    // This refactoring only works if there are exactly two references to the
-    // type parameter. The first one is the declaration, the second one its
-    // usage as a parameter type.
     if (ReferencesResult.References.size() != 2) {
-//      return false;
-    }
-
-    // TODO: Check if the only usage is a function parameter
-
-
-    // TODO: Check if the function parameter is a simple value parameter
-
-  }
-
-  auto CurrentTemplateParameterBeingChecked = &TemplateParameters[0];
-
-  for (auto parameter : FunctionTemplateDeclaration->getAsFunction()->parameters()) {
-    if (parameter->getOriginalType()->isUndeducedAutoType()) {
-      auto brah = "";
+      return false;
     }
   }
+
+  auto CurrentTemplateParameterBeingChecked = 0u;
+
+  for (auto *Parameter : FunctionTemplateDeclaration->getAsFunction()->parameters()) {
+    auto Type = Parameter->getType();
+    if (!Type->isTemplateTypeParmType())
+      continue;
+
+    const auto *TemplateTypeParameterType = dyn_cast_or_null<TemplateTypeParmType>(Type);
+    if (TemplateTypeParameterType->getIndex() == CurrentTemplateParameterBeingChecked) {
+      CurrentTemplateParameterBeingChecked += 1;
+    } else {
+      return false;
+    }
+  }
+
+  if (CurrentTemplateParameterBeingChecked != TemplateParameters->size())
+    // TODO: Make this comment more clear
+    // At least one template parameter was not used as a parameter.
+    return false;
 
   return true;
 }
