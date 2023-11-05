@@ -96,8 +96,6 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
     auto TemplateParameterPosition = sourceLocToPosition(Inputs.AST->getSourceManager(), TemplateParameter->getEndLoc());
     auto ReferencesResult = findReferences(*Inputs.AST, TemplateParameterPosition, 3, Inputs.Index);
 
-    // TODO: Check if the parameter is an auto parameter. If so, return false. We could support this case, but I don't want to deal with this atm.
-
     if (ReferencesResult.References.size() != 2) {
       return false;
     }
