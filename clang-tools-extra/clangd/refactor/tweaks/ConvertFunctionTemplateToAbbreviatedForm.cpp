@@ -98,9 +98,8 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
     auto TemplateParameterPosition = sourceLocToPosition(Inputs.AST->getSourceManager(), TemplateParameter->getEndLoc());
     auto ReferencesResult = findReferences(*Inputs.AST, TemplateParameterPosition, 3, Inputs.Index);
 
-    if (ReferencesResult.References.size() != 2) {
+    if (ReferencesResult.References.size() != 2)
       return false;
-    }
   }
 
   auto CurrentTemplateParameterBeingChecked = 0u;
