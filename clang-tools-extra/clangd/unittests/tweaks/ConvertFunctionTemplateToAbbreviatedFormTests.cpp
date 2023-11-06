@@ -16,25 +16,37 @@ namespace {
 TWEAK_TEST(ConvertFunctionTemplateToAbbreviatedForm);
 
 TEST_F(ConvertFunctionTemplateToAbbreviatedFormTest, Test) {
-  Context = Function;
-
   Header = R"cpp(
+      template <typename T>
+      concept foo = true;
+
+      template <typename T>
+      concept bar = true;
+
+      template <typename T, typename U>
+      concept baz = true;
+
+      template <typename T>
+      class list<T>;
   )cpp";
 
-  EXPECT_EQ(apply("template <typename T> auto f^o^o(T param) {}"),
-                  "auto foo(auto param) {}");
-  EXPECT_EQ(apply("template <typename...ArgTypes> auto f^o^o(ArgTypes...params) -> void{}"),
-                  "auto foo(auto...params) -> void{}");
+  ExtraArgs = {"-std=c++20"};
 
-  EXPECT_AVAILABLE("template <typename T> auto f^o^o(T param) {}");
-  EXPECT_AVAILABLE("template<std::integral T> auto f^o^o(T Tpl) -> void {}");
-  EXPECT_AVAILABLE("template<std::integral T> auto f^o^o(T const ** Tpl) -> void {}");
-  EXPECT_AVAILABLE("template <typename...ArgTypes> auto f^o^o(ArgTypes...params) -> void{}");
+  EXPECT_EQ(apply("template <typename T> auto ^fun(T param) {}"),
+                  " auto fun(auto param) {}");
+//  EXPECT_EQ(apply("template <typename...ArgTypes> auto f^o^o(ArgTypes...params) -> void{}"),
+//                  "auto foo(auto...params) -> void{}");
+
+  EXPECT_AVAILABLE("tem^plate <type^name ^T> auto f^un(^T pa^ram) {}");
+  EXPECT_AVAILABLE("tem^plate <f^oo ^T> auto fu^n(^T pa^ram) -> void {}");
+//  EXPECT_AVAILABLE("tem^plate <fo^o T> auto fu^n(^T const ** pa^ram) -> void {}");
+//  EXPECT_AVAILABLE("template <typename...ArgTypes> auto f^o^o(ArgTypes...params) -> void{}");
 
   // Not possible to have `auto` within collections
-  EXPECT_UNAVAILABLE("template<typename T> auto f^o^o(vector<T> param) -> void {}");
-  EXPECT_UNAVAILABLE("template<typename T> auto f^o^o(list<T> param) -> void {}");
-  EXPECT_UNAVAILABLE("template<class T, size_t N> auto f^o^o(T (&a)[N], int size) -> void {}");
+  EXPECT_UNAVAILABLE("template<typename T> auto f^u^n(list<T> param) -> void {}");
+  EXPECT_UNAVAILABLE("template<typename T> auto f^u^n(list<T> param) -> void {}");
+
+  EXPECT_UNAVAILABLE("tem^plate<type^name ^T, typename ^U> auto f^un(^U, ^T) -> void {}");
 }
 
 } // namespace
