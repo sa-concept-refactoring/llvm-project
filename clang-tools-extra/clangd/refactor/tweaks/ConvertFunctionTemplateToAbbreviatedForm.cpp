@@ -41,13 +41,14 @@ public:
   }
 
 private:
-  //const TemplateTypeParmDecl *TemplateTypeParameterDeclaration;
   const FunctionTemplateDecl *FunctionTemplateDeclaration;
 
   std::vector<const TypeConstraint*> TypeConstraints;
   std::vector<unsigned int> ParameterIndices;
 
-  auto generateFunctionParameterReplacement(ASTContext &Context)
+  auto generateFunctionParameterReplacement(unsigned int ParameterIndex,
+                                            ASTContext &Context,
+                                            FunctionDecl const &Function)
       -> llvm::Expected<tooling::Replacement>;
 
   auto generateTemplateDeclarationReplacement(ASTContext &Context)
@@ -55,11 +56,6 @@ private:
 
   template <typename T, typename NodeKind>
   static auto findNode(const SelectionTree::Node &Root) -> const T *;
-
-  template <typename T>
-  static auto findExpression(const SelectionTree::Node &Root) -> const T * {
-    return findNode<T, Expr>(Root);
-  }
 
   template <typename T>
   static auto findDeclaration(const SelectionTree::Node &Root) -> const T * {
@@ -134,21 +130,26 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
 
 Expected<Tweak::Effect> ConvertFunctionTemplateToAbbreviatedForm::apply(const Selection &Inputs) {
   auto &Context = Inputs.AST->getASTContext();
-  auto &TokenBuffer = Inputs.AST->getTokens();
 
   tooling::Replacements Replacements{};
 
   const auto *Root = Inputs.ASTSelection.commonAncestor();
 
   // Replace parameter type with `auto`
-  auto FunctionParameterReplacement =
-      generateFunctionParameterReplacement(Context);
+  auto *Function = FunctionTemplateDeclaration->getAsFunction();
 
-  if (auto Err = FunctionParameterReplacement.takeError())
-    return Err;
+  // Check if template parameters are present
+  auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
+  for (auto ParameterIndex = 0u; ParameterIndex < Parameters.size(); ParameterIndex++) {
+    auto FunctionParameterReplacement =
+        generateFunctionParameterReplacement(ParameterIndex, Context, *Function);
 
-  if (auto Err = Replacements.add(*FunctionParameterReplacement))
-    return Err;
+    if (auto Err = FunctionParameterReplacement.takeError())
+      return Err;
+
+    if (auto Err = Replacements.add(*FunctionParameterReplacement))
+      return Err;
+  }
 
   // Remove template declaration
   auto TemplateDeclarationReplacement =
@@ -174,20 +175,37 @@ auto ConvertFunctionTemplateToAbbreviatedForm::findNode(const SelectionTree::Nod
 }
 
 auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacement(
-    ASTContext &Context) -> llvm::Expected<tooling::Replacement> {
+    unsigned int ParameterIndex,
+    ASTContext &Context,
+    FunctionDecl const &Function) -> llvm::Expected<tooling::Replacement> {
   auto &SourceManager = Context.getSourceManager();
 
-  // Check if template parameters are present
-  // TODO: loop through all
-  // TODO: Get type of each template type parameter
-  auto *Parameter = FunctionTemplateDeclaration->getTemplatedDecl()->getParamDecl(0);
+  auto FunctionParameterIndex = ParameterIndices[ParameterIndex];
+  auto *TypeConstraint = TypeConstraints[ParameterIndex];
 
-  // TODO: Find reference
-  auto *Function = FunctionTemplateDeclaration->getAsFunction();
-  auto *FunctionParameter = Function->getParamDecl(0);
+  auto *FunctionParameter = Function.getParamDecl(FunctionParameterIndex);
 
-  // TODO: Replace reference with type + auto
-  auto FunctionTypeReplacementText = "auto " + std::string{Parameter->getDeclName().getAsString()};
+  std::string FunctionTypeReplacementText;
+  if(TypeConstraint == nullptr) {
+    FunctionTypeReplacementText =
+        "auto " + std::string{FunctionParameter->getDeclName().getAsString()};
+    //  TODO: add template arguments
+    //  } else if (TypeConstraint->getTemplateArgsAsWritten()->getNumTemplateArgs() > 0){
+    //    FunctionTypeReplacementText =
+    //        std::string{TypeConstraint->getNamedConcept()->getQualifiedNameAsString()};
+    //
+    //    for (auto ArgumentIndex = 0u; ArgumentIndex < TypeConstraint->getTemplateArgsAsWritten()->getNumTemplateArgs(); ArgumentIndex++) {
+    //      FunctionTypeReplacementText += "," + std::string{TypeConstraint->getTemplateArgsAsWritten()[ArgumentIndex]};
+    //    }
+    //
+    //    FunctionTypeReplacementText += " auto " +  std::string{FunctionParameter->getDeclName().getAsString()};
+    //  }
+  } else {
+    FunctionTypeReplacementText =
+        std::string{TypeConstraint->getNamedConcept()->getQualifiedNameAsString()} + " auto " +  std::string{FunctionParameter->getDeclName().getAsString()};
+  }
+
+  // ->getTypeConstraint()->getTemplateArgsAsWritten();
 
   auto FunctionParameterRange =
       toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
@@ -197,7 +215,6 @@ auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacem
     return error("Could not obtain range of the template parameter. Macros?");
 
   // Replaces `typename T` with `auto`
-  // TODO: Replace `T` in `f(T param)` with auto
   return tooling::Replacement(
       SourceManager,
       CharSourceRange::getCharRange(*FunctionParameterRange),
