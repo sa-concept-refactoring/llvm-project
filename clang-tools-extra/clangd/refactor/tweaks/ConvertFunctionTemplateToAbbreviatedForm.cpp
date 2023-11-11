@@ -45,6 +45,7 @@ private:
 
   std::vector<const TypeConstraint*> TypeConstraints;
   std::vector<unsigned int> ParameterIndices;
+  std::vector<std::vector<tok::TokenKind>> Qualifiers;
 
   auto generateFunctionParameterReplacement(unsigned int ParameterIndex,
                                             ASTContext &Context,
@@ -79,6 +80,11 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
     // TODO: Investigate if we could handle empty templates easily.
     return false;
 
+  auto Size = TemplateParameters->size();
+  TypeConstraints.reserve(Size);
+  ParameterIndices.reserve(Size);
+  Qualifiers.reserve(Size);
+
   for (auto *TemplateParameter : *TemplateParameters) {
     // TODO: Make this comment more clear
     // For each template parameter we check how many times it is referenced.
@@ -107,6 +113,34 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
   auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
   for (auto ParameterIndex = 0u; ParameterIndex < Parameters.size(); ParameterIndex++) {
     auto Type = Parameters[ParameterIndex]->getType();
+    std::vector<tok::TokenKind> QualifiersForParameter{};
+
+    if (Type->isRValueReferenceType()) {
+      QualifiersForParameter.push_back(tok::ampamp);
+      Type = Type.getNonReferenceType();
+    }
+
+    if (Type->isLValueReferenceType()) {
+      QualifiersForParameter.push_back(tok::amp);
+      Type = Type.getNonReferenceType();
+    }
+
+    if (Type.isConstQualified()) {
+      QualifiersForParameter.push_back(tok::kw_const);
+    }
+
+    while (Type->isPointerType()) {
+      QualifiersForParameter.push_back(tok::star);
+      Type = Type->getPointeeType();
+
+      if (Type.isConstQualified()) {
+        QualifiersForParameter.push_back(tok::kw_const);
+      }
+    }
+
+    std::reverse(QualifiersForParameter.begin(), QualifiersForParameter.end());
+    Qualifiers.push_back(QualifiersForParameter);
+
     if (!Type->isTemplateTypeParmType())
       continue;
 
