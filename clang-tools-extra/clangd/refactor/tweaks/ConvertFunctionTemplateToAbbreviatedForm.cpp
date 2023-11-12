@@ -9,6 +9,7 @@
 #include "llvm/Support/Error.h"
 #include "SourceCode.h"
 #include "FindTarget.h"
+#include <numeric>
 #include "refactor/Tweak.h"
 #include "llvm/ADT/StringRef.h"
 #include "ParsedAST.h"
@@ -216,33 +217,38 @@ auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacem
   auto FunctionParameterIndex = ParameterIndices[ParameterIndex];
   auto *TypeConstraint = TypeConstraints[ParameterIndex];
 
-  auto *FunctionParameter = Function.getParamDecl(FunctionParameterIndex);
+  auto *Parameter = Function.getParamDecl(FunctionParameterIndex);
+  auto ParameterName = Parameter->getDeclName().getAsString();
 
-  std::string FunctionTypeReplacementText;
-  if(TypeConstraint == nullptr) {
-    FunctionTypeReplacementText =
-        "auto " + std::string{FunctionParameter->getDeclName().getAsString()};
-    //  TODO: add template arguments
-    //  } else if (TypeConstraint->getTemplateArgsAsWritten()->getNumTemplateArgs() > 0){
-    //    FunctionTypeReplacementText =
-    //        std::string{TypeConstraint->getNamedConcept()->getQualifiedNameAsString()};
-    //
-    //    for (auto ArgumentIndex = 0u; ArgumentIndex < TypeConstraint->getTemplateArgsAsWritten()->getNumTemplateArgs(); ArgumentIndex++) {
-    //      FunctionTypeReplacementText += "," + std::string{TypeConstraint->getTemplateArgsAsWritten()[ArgumentIndex]};
-    //    }
-    //
-    //    FunctionTypeReplacementText += " auto " +  std::string{FunctionParameter->getDeclName().getAsString()};
-    //  }
-  } else {
-    FunctionTypeReplacementText =
-        std::string{TypeConstraint->getNamedConcept()->getQualifiedNameAsString()} + " auto " +  std::string{FunctionParameter->getDeclName().getAsString()};
+  // TODO: Maybe find a better name for this
+  std::vector<std::string> ParameterTokens{};
+
+  if (TypeConstraint != nullptr) {
+    auto ConceptName = TypeConstraint->getNamedConcept()->getQualifiedNameAsString();
+    ParameterTokens.push_back(ConceptName);
   }
 
-  // ->getTypeConstraint()->getTemplateArgsAsWritten();
+  ParameterTokens.push_back(getKeywordSpelling(tok::kw_auto));
+
+  // TODO: Make this more efficient :)
+  for (const auto &Qualifier : Qualifiers[ParameterIndex]) {
+    if (const auto *KeywordSpelling = getKeywordSpelling(Qualifier)) {
+      ParameterTokens.push_back(KeywordSpelling);
+    } else if (const auto *PunctuatorSpelling = getPunctuatorSpelling(Qualifier)) {
+      ParameterTokens.push_back(PunctuatorSpelling);
+    }
+
+    // TODO: Handle unknown tokens
+  }
+
+  ParameterTokens.push_back(ParameterName);
+
+  auto FunctionTypeReplacementText = std::accumulate(ParameterTokens.begin(), ParameterTokens.end(), std::string{}, [](auto Result, auto Token) {
+    return Result + " " + Token;
+  });
 
   auto FunctionParameterRange =
-      toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
-                          FunctionParameter->getSourceRange());
+      toHalfOpenFileRange(SourceManager, Context.getLangOpts(), Parameter->getSourceRange());
 
   if (!FunctionParameterRange)
     return error("Could not obtain range of the template parameter. Macros?");
