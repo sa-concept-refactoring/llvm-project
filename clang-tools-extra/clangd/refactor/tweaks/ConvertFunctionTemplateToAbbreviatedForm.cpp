@@ -48,15 +48,14 @@ private:
   std::vector<unsigned int> ParameterIndices;
   std::vector<std::vector<tok::TokenKind>> Qualifiers;
 
-  auto generateFunctionParameterReplacement(unsigned int ParameterIndex,
-                                            ASTContext &Context)
+  auto generateFunctionParameterReplacement(unsigned int, ASTContext&)
       -> llvm::Expected<tooling::Replacement>;
 
-  auto generateTemplateDeclarationReplacement(ASTContext &Context)
+  auto generateTemplateDeclarationReplacement(ASTContext&)
       -> llvm::Expected<tooling::Replacement>;
 
   template <typename T, typename NodeKind>
-  static auto findNode(const SelectionTree::Node &Root) -> const T *;
+  static auto findNode(const SelectionTree::Node&) -> const T *;
 
   template <typename T>
   static auto findDeclaration(const SelectionTree::Node &Root) -> const T * {
@@ -173,9 +172,7 @@ Expected<Tweak::Effect> ConvertFunctionTemplateToAbbreviatedForm::apply(const Se
   // Replace parameter types
   auto TemplateParameterCount = ParameterIndices.size();
   for (auto TemplateParameterIndex = 0u; TemplateParameterIndex < TemplateParameterCount; TemplateParameterIndex++) {
-    auto FunctionParameterIndex = ParameterIndices[TemplateParameterIndex];
-    auto FunctionParameterReplacement = generateFunctionParameterReplacement(FunctionParameterIndex, Context);
-
+    auto FunctionParameterReplacement = generateFunctionParameterReplacement(TemplateParameterIndex, Context);
     AddReplacement(FunctionParameterReplacement);
   }
 
@@ -199,12 +196,12 @@ auto ConvertFunctionTemplateToAbbreviatedForm::findNode(const SelectionTree::Nod
 }
 
 auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacement(
-    unsigned int ParameterIndex,
+    unsigned int TemplateParameterIndex,
     ASTContext &Context) -> llvm::Expected<tooling::Replacement> {
   auto &SourceManager = Context.getSourceManager();
 
-  auto FunctionParameterIndex = ParameterIndices[ParameterIndex];
-  auto *TypeConstraint = TypeConstraints[ParameterIndex];
+  auto FunctionParameterIndex = ParameterIndices[TemplateParameterIndex];
+  auto *TypeConstraint = TypeConstraints[TemplateParameterIndex];
 
   auto *Parameter = FunctionTemplateDeclaration->getAsFunction()->getParamDecl(FunctionParameterIndex);
   auto ParameterName = Parameter->getDeclName().getAsString();
@@ -220,7 +217,7 @@ auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacem
   ParameterTokens.push_back(getKeywordSpelling(tok::kw_auto));
 
   // TODO: Make this more efficient :)
-  for (const auto &Qualifier : Qualifiers[ParameterIndex]) {
+  for (const auto &Qualifier : Qualifiers[TemplateParameterIndex]) {
     if (const auto *KeywordSpelling = getKeywordSpelling(Qualifier)) {
       ParameterTokens.push_back(KeywordSpelling);
     } else if (const auto *PunctuatorSpelling = getPunctuatorSpelling(Qualifier)) {
