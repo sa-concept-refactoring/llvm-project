@@ -161,38 +161,29 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
   return true;
 }
 
+#define AddReplacement(Replacements, Replacement) \
+if (auto Err = Replacement.takeError()) return Err; \
+if (auto Err = Replacements.add(*Replacement)) return Err;
+
 Expected<Tweak::Effect> ConvertFunctionTemplateToAbbreviatedForm::apply(const Selection &Inputs) {
   auto &Context = Inputs.AST->getASTContext();
 
   tooling::Replacements Replacements{};
 
-  const auto *Root = Inputs.ASTSelection.commonAncestor();
+  // Replace parameter types
+  auto TemplateParameterCount = ParameterIndices.size();
+  for (auto TemplateParameterIndex = 0u; TemplateParameterIndex < TemplateParameterCount; TemplateParameterIndex++) {
+    auto FunctionParameterIndex = ParameterIndices[TemplateParameterIndex];
+    auto FunctionParameterReplacement = generateFunctionParameterReplacement(FunctionParameterIndex, Context);
 
-  // Replace parameter type with `auto`
-  auto *Function = FunctionTemplateDeclaration->getAsFunction();
-
-  // Check if template parameters are present
-  auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
-  for (auto ParameterIndex = 0u; ParameterIndex < Parameters.size(); ParameterIndex++) {
-    auto FunctionParameterReplacement =
-        generateFunctionParameterReplacement(ParameterIndex, Context, *Function);
-
-    if (auto Err = FunctionParameterReplacement.takeError())
-      return Err;
-
-    if (auto Err = Replacements.add(*FunctionParameterReplacement))
-      return Err;
+    AddReplacement(Replacements, FunctionParameterReplacement);
   }
 
   // Remove template declaration
   auto TemplateDeclarationReplacement =
       generateTemplateDeclarationReplacement(Context);
 
-  if (auto Err = TemplateDeclarationReplacement.takeError())
-    return Err;
-
-  if (auto Err = Replacements.add(*TemplateDeclarationReplacement))
-    return Err;
+  AddReplacement(Replacements, TemplateDeclarationReplacement);
 
   return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
