@@ -167,14 +167,14 @@ Expected<Tweak::Effect> ConvertFunctionTemplateToAbbreviatedForm::apply(const Se
   auto TemplateParameterCount = ParameterIndices.size();
   for (auto TemplateParameterIndex = 0u; TemplateParameterIndex < TemplateParameterCount; TemplateParameterIndex++) {
     auto FunctionParameterReplacement = generateFunctionParameterReplacement(TemplateParameterIndex, Context);
-    AddReplacement(FunctionParameterReplacement);
+    AddReplacement(FunctionParameterReplacement)
   }
 
   // Remove template declaration
   auto TemplateDeclarationReplacement =
       generateTemplateDeclarationReplacement(Context);
 
-  AddReplacement(TemplateDeclarationReplacement);
+  AddReplacement(TemplateDeclarationReplacement)
 
   return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
