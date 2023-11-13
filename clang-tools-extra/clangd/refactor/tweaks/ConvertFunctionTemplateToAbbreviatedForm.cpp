@@ -106,8 +106,12 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
 
   auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
   for (auto ParameterIndex = 0u; ParameterIndex < Parameters.size(); ParameterIndex++) {
-    auto Type = Parameters[ParameterIndex]->getType();
     std::vector<tok::TokenKind> QualifiersForParameter{};
+    auto PotentialPackExpansionType = Parameters[ParameterIndex]->getType();
+    auto Type = PotentialPackExpansionType.getNonPackExpansionType();
+
+    if (isa_and_nonnull<PackExpansionType>(PotentialPackExpansionType))
+      QualifiersForParameter.push_back(tok::ellipsis);
 
     if (Type->isRValueReferenceType()) {
       QualifiersForParameter.push_back(tok::ampamp);
@@ -135,16 +139,15 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
     if (!Type->isTemplateTypeParmType())
       continue;
 
-    std::reverse(QualifiersForParameter.begin(), QualifiersForParameter.end());
-    Qualifiers.push_back(QualifiersForParameter);
-
     const auto *TemplateTypeParameterType = dyn_cast_or_null<TemplateTypeParmType>(Type);
-    if (TemplateTypeParameterType->getIndex() == CurrentTemplateParameterBeingChecked) {
-      CurrentTemplateParameterBeingChecked += 1;
-      ParameterIndices.push_back(ParameterIndex);
-    } else {
+    if (TemplateTypeParameterType->getIndex() != CurrentTemplateParameterBeingChecked)
       return false;
-    }
+
+    std::reverse(QualifiersForParameter.begin(), QualifiersForParameter.end());
+
+    Qualifiers.push_back(QualifiersForParameter);
+    ParameterIndices.push_back(ParameterIndex);
+    CurrentTemplateParameterBeingChecked += 1;
   }
 
   // All defined template parameters need to be used as function parameters
