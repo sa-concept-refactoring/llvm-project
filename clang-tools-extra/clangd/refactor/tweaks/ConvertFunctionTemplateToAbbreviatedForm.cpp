@@ -49,8 +49,7 @@ private:
   std::vector<std::vector<tok::TokenKind>> Qualifiers;
 
   auto generateFunctionParameterReplacement(unsigned int ParameterIndex,
-                                            ASTContext &Context,
-                                            FunctionDecl const &Function)
+                                            ASTContext &Context)
       -> llvm::Expected<tooling::Replacement>;
 
   auto generateTemplateDeclarationReplacement(ASTContext &Context)
@@ -210,14 +209,13 @@ auto ConvertFunctionTemplateToAbbreviatedForm::findNode(const SelectionTree::Nod
 
 auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacement(
     unsigned int ParameterIndex,
-    ASTContext &Context,
-    FunctionDecl const &Function) -> llvm::Expected<tooling::Replacement> {
+    ASTContext &Context) -> llvm::Expected<tooling::Replacement> {
   auto &SourceManager = Context.getSourceManager();
 
   auto FunctionParameterIndex = ParameterIndices[ParameterIndex];
   auto *TypeConstraint = TypeConstraints[ParameterIndex];
 
-  auto *Parameter = Function.getParamDecl(FunctionParameterIndex);
+  auto *Parameter = FunctionTemplateDeclaration->getAsFunction()->getParamDecl(FunctionParameterIndex);
   auto ParameterName = Parameter->getDeclName().getAsString();
 
   // TODO: Maybe find a better name for this
@@ -273,6 +271,7 @@ auto ConvertFunctionTemplateToAbbreviatedForm::generateTemplateDeclarationReplac
     return error("Could not obtain range of the template parameter. Macros?");
 
   // TODO: delete empty line (\10 is backslash but doesn't work)
+  // Comment from Jeremy: I'm not sure what is meant by '\10'
   return tooling::Replacement(
       SourceManager,
       CharSourceRange::getCharRange(*TemplateDeclarationRange),
