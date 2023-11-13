@@ -50,8 +50,7 @@ private:
   std::vector<unsigned int> ParameterIndices;
   std::vector<std::vector<tok::TokenKind>> Qualifiers;
 
-  auto functionParametersValid(TemplateParameterList *TemplateParameters)
-      -> bool;
+  auto traverseParameters(TemplateParameterList *TemplateParameters) -> bool;
 
   auto generateFunctionParameterReplacement(unsigned int, ASTContext &)
       -> llvm::Expected<tooling::Replacement>;
@@ -59,8 +58,7 @@ private:
   auto generateTemplateDeclarationReplacement(ASTContext &)
       -> llvm::Expected<tooling::Replacement>;
 
-  auto getQualifiersForParameter(QualType PotentialPackExpansionType,
-                                 QualType *Type) -> std::vector<tok::TokenKind>;
+  auto getQualifiersForType(QualType *Type) -> std::vector<tok::TokenKind>;
 
   template <typename T>
   static auto findDeclaration(const SelectionTree::Node &Root) -> const T * {
@@ -116,7 +114,7 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(
       return false;
   }
 
-  return functionParametersValid(TemplateParameters);
+  return traverseParameters(TemplateParameters);
 }
 
 #define AddReplacement(Replacement)                                            \
@@ -150,17 +148,15 @@ ConvertFunctionTemplateToAbbreviatedForm::apply(const Selection &Inputs) {
       return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
 
-auto ConvertFunctionTemplateToAbbreviatedForm::functionParametersValid(
+auto ConvertFunctionTemplateToAbbreviatedForm::traverseParameters(
     TemplateParameterList *TemplateParameters) -> bool {
   auto CurrentTemplateParameterBeingChecked = 0u;
   auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
   for (auto ParameterIndex = 0u; ParameterIndex < Parameters.size();
        ParameterIndex++) {
-    auto PotentialPackExpansionType = Parameters[ParameterIndex]->getType();
-    auto Type = PotentialPackExpansionType.getNonPackExpansionType();
+    auto Type = Parameters[ParameterIndex]->getType();
 
-    std::vector<tok::TokenKind> QualifiersForParameter =
-        getQualifiersForParameter(PotentialPackExpansionType, &Type);
+    std::vector<tok::TokenKind> QualifiersForType = getQualifiersForType(&Type);
 
     if (!Type->isTemplateTypeParmType())
       continue;
@@ -171,9 +167,9 @@ auto ConvertFunctionTemplateToAbbreviatedForm::functionParametersValid(
         CurrentTemplateParameterBeingChecked)
       return false;
 
-    std::reverse(QualifiersForParameter.begin(), QualifiersForParameter.end());
+    std::reverse(QualifiersForType.begin(), QualifiersForType.end());
 
-    Qualifiers.push_back(QualifiersForParameter);
+    Qualifiers.push_back(QualifiersForType);
     ParameterIndices.push_back(ParameterIndex);
     CurrentTemplateParameterBeingChecked += 1;
   }
@@ -276,38 +272,39 @@ auto ConvertFunctionTemplateToAbbreviatedForm::
       "");
 }
 
-auto ConvertFunctionTemplateToAbbreviatedForm::getQualifiersForParameter(
-    QualType PotentialPackExpansionType, QualType *Type)
-    -> std::vector<tok::TokenKind> {
-  std::vector<tok::TokenKind> QualifiersForParameter{};
+auto ConvertFunctionTemplateToAbbreviatedForm::getQualifiersForType(
+    QualType *Type) -> std::vector<tok::TokenKind> {
+  std::vector<tok::TokenKind> QualifiersForType{};
 
-  if (isa_and_nonnull<PackExpansionType>(PotentialPackExpansionType))
-    QualifiersForParameter.push_back(tok::ellipsis);
+  if (isa_and_nonnull<PackExpansionType>(*Type))
+    QualifiersForType.push_back(tok::ellipsis);
+
+  *Type = Type->getNonPackExpansionType();
 
   if ((*Type)->isRValueReferenceType()) {
-    QualifiersForParameter.push_back(tok::ampamp);
+    QualifiersForType.push_back(tok::ampamp);
     *Type = Type->getNonReferenceType();
   }
 
   if ((*Type)->isLValueReferenceType()) {
-    QualifiersForParameter.push_back(tok::amp);
+    QualifiersForType.push_back(tok::amp);
     *Type = Type->getNonReferenceType();
   }
 
   if ((*Type).isConstQualified()) {
-    QualifiersForParameter.push_back(tok::kw_const);
+    QualifiersForType.push_back(tok::kw_const);
   }
 
   while ((*Type)->isPointerType()) {
-    QualifiersForParameter.push_back(tok::star);
+    QualifiersForType.push_back(tok::star);
     *Type = (*Type)->getPointeeType();
 
     if ((*Type).isConstQualified()) {
-      QualifiersForParameter.push_back(tok::kw_const);
+      QualifiersForType.push_back(tok::kw_const);
     }
   }
 
-  return QualifiersForParameter;
+  return QualifiersForType;
 }
 
 } // namespace
