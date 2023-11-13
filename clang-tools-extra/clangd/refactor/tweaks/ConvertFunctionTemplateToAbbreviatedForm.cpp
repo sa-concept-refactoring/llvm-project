@@ -137,11 +137,11 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
       }
     }
 
-    std::reverse(QualifiersForParameter.begin(), QualifiersForParameter.end());
-    Qualifiers.push_back(QualifiersForParameter);
-
     if (!Type->isTemplateTypeParmType())
       continue;
+
+    std::reverse(QualifiersForParameter.begin(), QualifiersForParameter.end());
+    Qualifiers.push_back(QualifiersForParameter);
 
     const auto *TemplateTypeParameterType = dyn_cast_or_null<TemplateTypeParmType>(Type);
     if (TemplateTypeParameterType->getIndex() == CurrentTemplateParameterBeingChecked) {
@@ -212,6 +212,12 @@ auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacem
   if (TypeConstraint != nullptr) {
     auto ConceptName = TypeConstraint->getNamedConcept()->getQualifiedNameAsString();
     ParameterTokens.push_back(ConceptName);
+
+    if (const auto *TemplateArgs = TypeConstraint->getTemplateArgsAsWritten()) {
+      auto TemplateArgsRange = SourceRange(TemplateArgs->getLAngleLoc(), TemplateArgs->getRAngleLoc());
+      auto TemplateArgsSource = toSourceCode(SourceManager, TemplateArgsRange);
+      ParameterTokens.push_back(TemplateArgsSource.str() + '>');
+    }
   }
 
   ParameterTokens.push_back(getKeywordSpelling(tok::kw_auto));
