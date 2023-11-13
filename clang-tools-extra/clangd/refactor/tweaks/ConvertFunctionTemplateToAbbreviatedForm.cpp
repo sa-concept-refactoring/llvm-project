@@ -42,6 +42,7 @@ public:
   }
 
 private:
+  const char *AutoKeyword = getKeywordSpelling(tok::kw_auto);
   const FunctionTemplateDecl *FunctionTemplateDeclaration;
 
   std::vector<const TypeConstraint*> TypeConstraints;
@@ -54,13 +55,13 @@ private:
   auto generateTemplateDeclarationReplacement(ASTContext&)
       -> llvm::Expected<tooling::Replacement>;
 
-  template <typename T, typename NodeKind>
-  static auto findNode(const SelectionTree::Node&) -> const T *;
-
   template <typename T>
   static auto findDeclaration(const SelectionTree::Node &Root) -> const T * {
     return findNode<T, Decl>(Root);
   }
+
+  template <typename T, typename NodeKind>
+  static auto findNode(const SelectionTree::Node&) -> const T *;
 };
 
 REGISTER_TWEAK(ConvertFunctionTemplateToAbbreviatedForm)
@@ -75,28 +76,24 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
     return false;
 
   auto *TemplateParameters = FunctionTemplateDeclaration->getTemplateParameters();
-  if (TemplateParameters->size() == 0)
-    // TODO: Investigate if we could handle empty templates easily.
-    return false;
 
   auto Size = TemplateParameters->size();
   TypeConstraints.reserve(Size);
   ParameterIndices.reserve(Size);
   Qualifiers.reserve(Size);
 
+  // TODO: Make this comment more clear
+  // Check how many times each template parameter is referenced.
+  // Depending on the number of references it can be checked
+  // if the refactoring is possible:
+  // - exactly one: The template parameter was declared but never used, which
+  //                means we know for sure it doesn't appear as a parameter.
+  // - exactly two: The template parameter was used exactly once, either as a
+  //                parameter or somewhere else. This is the case we are
+  //                interested in.
+  // - more than two: The template parameter was either used for multiple
+  //                  parameters or somewhere else in the function.
   for (auto *TemplateParameter : *TemplateParameters) {
-    // TODO: Make this comment more clear
-    // For each template parameter we check how many times it is referenced.
-    // Depending on the number of references we know a few more things.
-    // If there is
-    // - exactly one: The template parameter was declared but never used, which
-    //                means we know for sure it doesn't appear as a parameter.
-    // - exactly two: The template parameter was used exactly once, either as a
-    //                parameter or somewhere else. This is the case we are
-    //                interested in.
-    // - more than two: The template parameter was either used for multiple
-    //                  parameters or somewhere else in the function.
-
     auto *TemplateParameterDeclaration = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
     TypeConstraints.push_back(TemplateParameterDeclaration->getTypeConstraint());
 
@@ -152,9 +149,8 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
     }
   }
 
+  // All defined template parameters need to be used as function parameters
   if (CurrentTemplateParameterBeingChecked != TemplateParameters->size())
-    // TODO: Make this comment more clear
-    // At least one template parameter was not used as a parameter.
     return false;
 
   return true;
@@ -220,7 +216,7 @@ auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacem
     }
   }
 
-  ParameterTokens.push_back(getKeywordSpelling(tok::kw_auto));
+  ParameterTokens.push_back(AutoKeyword);
 
   // TODO: Make this more efficient :)
   for (const auto &Qualifier : Qualifiers[TemplateParameterIndex]) {
@@ -264,8 +260,6 @@ auto ConvertFunctionTemplateToAbbreviatedForm::generateTemplateDeclarationReplac
   if (!TemplateDeclarationRange)
     return error("Could not obtain range of the template parameter. Macros?");
 
-  // TODO: delete empty line (\10 is backslash but doesn't work)
-  // Comment from Jeremy: I'm not sure what is meant by '\10'
   return tooling::Replacement(
       SourceManager,
       CharSourceRange::getCharRange(*TemplateDeclarationRange),
