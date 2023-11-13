@@ -161,7 +161,7 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
   return true;
 }
 
-#define AddReplacement(Replacements, Replacement) \
+#define AddReplacement(Replacement) \
 if (auto Err = Replacement.takeError()) return Err; \
 if (auto Err = Replacements.add(*Replacement)) return Err;
 
@@ -176,14 +176,14 @@ Expected<Tweak::Effect> ConvertFunctionTemplateToAbbreviatedForm::apply(const Se
     auto FunctionParameterIndex = ParameterIndices[TemplateParameterIndex];
     auto FunctionParameterReplacement = generateFunctionParameterReplacement(FunctionParameterIndex, Context);
 
-    AddReplacement(Replacements, FunctionParameterReplacement);
+    AddReplacement(FunctionParameterReplacement);
   }
 
   // Remove template declaration
   auto TemplateDeclarationReplacement =
       generateTemplateDeclarationReplacement(Context);
 
-  AddReplacement(Replacements, TemplateDeclarationReplacement);
+  AddReplacement(TemplateDeclarationReplacement);
 
   return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
