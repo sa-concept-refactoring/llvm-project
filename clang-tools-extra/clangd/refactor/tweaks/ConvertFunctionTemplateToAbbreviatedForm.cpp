@@ -5,20 +5,18 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-#include "AST.h"
 #include "llvm/Support/Error.h"
-#include "SourceCode.h"
 #include "FindTarget.h"
-#include <numeric>
+#include "SourceCode.h"
+#include "XRefs.h"
 #include "refactor/Tweak.h"
-#include "llvm/ADT/StringRef.h"
-#include "ParsedAST.h"
 #include "support/Logger.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ExprConcepts.h"
 #include "clang/Tooling/Core/Replacement.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
-#include "XRefs.h"
+#include <numeric>
 
 namespace clang {
 namespace clangd {
@@ -36,7 +34,7 @@ public:
 
   bool prepare(const Selection &Inputs) override;
   Expected<Effect> apply(const Selection &Inputs) override;
-  std::string title() const override { return "Convert to auto parameter"; }
+  std::string title() const override { return "Convert function template to abbreviated form"; }
   llvm::StringLiteral kind() const override {
     return CodeAction::REFACTOR_KIND;
   }
