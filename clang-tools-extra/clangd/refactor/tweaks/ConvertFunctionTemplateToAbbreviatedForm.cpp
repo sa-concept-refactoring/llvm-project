@@ -1,11 +1,11 @@
-//===--- ConvertFunctionTemplateToAbbreviatedForm.cpp --------------------------------------*- C++-*-===//
+//===--- ConvertFunctionTemplateToAbbreviatedForm.cpp
+//--------------------------------------*- C++-*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-#include "llvm/Support/Error.h"
 #include "FindTarget.h"
 #include "SourceCode.h"
 #include "XRefs.h"
@@ -16,6 +16,7 @@
 #include "clang/Tooling/Core/Replacement.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/Error.h"
 #include <numeric>
 
 namespace clang {
@@ -34,7 +35,9 @@ public:
 
   bool prepare(const Selection &Inputs) override;
   Expected<Effect> apply(const Selection &Inputs) override;
-  std::string title() const override { return "Convert function template to abbreviated form"; }
+  std::string title() const override {
+    return "Convert function template to abbreviated form";
+  }
   llvm::StringLiteral kind() const override {
     return CodeAction::REFACTOR_KIND;
   }
@@ -43,15 +46,21 @@ private:
   const char *AutoKeyword = getKeywordSpelling(tok::kw_auto);
   const FunctionTemplateDecl *FunctionTemplateDeclaration;
 
-  std::vector<const TypeConstraint*> TypeConstraints;
+  std::vector<const TypeConstraint *> TypeConstraints;
   std::vector<unsigned int> ParameterIndices;
   std::vector<std::vector<tok::TokenKind>> Qualifiers;
 
-  auto generateFunctionParameterReplacement(unsigned int, ASTContext&)
+  auto functionParametersValid(TemplateParameterList *TemplateParameters)
+      -> bool;
+
+  auto generateFunctionParameterReplacement(unsigned int, ASTContext &)
       -> llvm::Expected<tooling::Replacement>;
 
-  auto generateTemplateDeclarationReplacement(ASTContext&)
+  auto generateTemplateDeclarationReplacement(ASTContext &)
       -> llvm::Expected<tooling::Replacement>;
+
+  auto getQualifiersForParameter(QualType PotentialPackExpansionType,
+                                 QualType *Type) -> std::vector<tok::TokenKind>;
 
   template <typename T>
   static auto findDeclaration(const SelectionTree::Node &Root) -> const T * {
@@ -59,12 +68,13 @@ private:
   }
 
   template <typename T, typename NodeKind>
-  static auto findNode(const SelectionTree::Node&) -> const T *;
+  static auto findNode(const SelectionTree::Node &) -> const T *;
 };
 
 REGISTER_TWEAK(ConvertFunctionTemplateToAbbreviatedForm)
 
-bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) {
+bool ConvertFunctionTemplateToAbbreviatedForm::prepare(
+    const Selection &Inputs) {
   const auto *Root = Inputs.ASTSelection.commonAncestor();
   if (!Root)
     return false;
@@ -73,14 +83,14 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
   if (!FunctionTemplateDeclaration)
     return false;
 
-  auto *TemplateParameters = FunctionTemplateDeclaration->getTemplateParameters();
+  auto *TemplateParameters =
+      FunctionTemplateDeclaration->getTemplateParameters();
 
   auto Size = TemplateParameters->size();
   TypeConstraints.reserve(Size);
   ParameterIndices.reserve(Size);
   Qualifiers.reserve(Size);
 
-  // TODO: Make this comment more clear
   // Check how many times each template parameter is referenced.
   // Depending on the number of references it can be checked
   // if the refactoring is possible:
@@ -92,55 +102,73 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
   // - more than two: The template parameter was either used for multiple
   //                  parameters or somewhere else in the function.
   for (auto *TemplateParameter : *TemplateParameters) {
-    auto *TemplateParameterDeclaration = dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
-    TypeConstraints.push_back(TemplateParameterDeclaration->getTypeConstraint());
+    auto *TemplateParameterDeclaration =
+        dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
+    TypeConstraints.push_back(
+        TemplateParameterDeclaration->getTypeConstraint());
 
-    auto TemplateParameterPosition = sourceLocToPosition(Inputs.AST->getSourceManager(), TemplateParameter->getEndLoc());
-    auto ReferencesResult = findReferences(*Inputs.AST, TemplateParameterPosition, 3, Inputs.Index);
+    auto TemplateParameterPosition = sourceLocToPosition(
+        Inputs.AST->getSourceManager(), TemplateParameter->getEndLoc());
+    auto ReferencesResult =
+        findReferences(*Inputs.AST, TemplateParameterPosition, 3, Inputs.Index);
 
     if (ReferencesResult.References.size() != 2)
       return false;
   }
 
-  auto CurrentTemplateParameterBeingChecked = 0u;
+  return functionParametersValid(TemplateParameters);
+}
 
+#define AddReplacement(Replacement)                                            \
+  if (auto Err = Replacement.takeError())                                      \
+    return Err;                                                                \
+  if (auto Err = Replacements.add(*Replacement))                               \
+    return Err;
+
+Expected<Tweak::Effect>
+ConvertFunctionTemplateToAbbreviatedForm::apply(const Selection &Inputs) {
+  auto &Context = Inputs.AST->getASTContext();
+
+  tooling::Replacements Replacements{};
+
+  // Replace parameter types
+  auto TemplateParameterCount = ParameterIndices.size();
+  for (auto TemplateParameterIndex = 0u;
+       TemplateParameterIndex < TemplateParameterCount;
+       TemplateParameterIndex++) {
+    auto FunctionParameterReplacement =
+        generateFunctionParameterReplacement(TemplateParameterIndex, Context);
+    AddReplacement(FunctionParameterReplacement)
+  }
+
+  // Remove template declaration
+  auto TemplateDeclarationReplacement =
+      generateTemplateDeclarationReplacement(Context);
+
+  AddReplacement(TemplateDeclarationReplacement)
+
+      return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
+}
+
+auto ConvertFunctionTemplateToAbbreviatedForm::functionParametersValid(
+    TemplateParameterList *TemplateParameters) -> bool {
+  auto CurrentTemplateParameterBeingChecked = 0u;
   auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
-  for (auto ParameterIndex = 0u; ParameterIndex < Parameters.size(); ParameterIndex++) {
-    std::vector<tok::TokenKind> QualifiersForParameter{};
+  for (auto ParameterIndex = 0u; ParameterIndex < Parameters.size();
+       ParameterIndex++) {
     auto PotentialPackExpansionType = Parameters[ParameterIndex]->getType();
     auto Type = PotentialPackExpansionType.getNonPackExpansionType();
 
-    if (isa_and_nonnull<PackExpansionType>(PotentialPackExpansionType))
-      QualifiersForParameter.push_back(tok::ellipsis);
-
-    if (Type->isRValueReferenceType()) {
-      QualifiersForParameter.push_back(tok::ampamp);
-      Type = Type.getNonReferenceType();
-    }
-
-    if (Type->isLValueReferenceType()) {
-      QualifiersForParameter.push_back(tok::amp);
-      Type = Type.getNonReferenceType();
-    }
-
-    if (Type.isConstQualified()) {
-      QualifiersForParameter.push_back(tok::kw_const);
-    }
-
-    while (Type->isPointerType()) {
-      QualifiersForParameter.push_back(tok::star);
-      Type = Type->getPointeeType();
-
-      if (Type.isConstQualified()) {
-        QualifiersForParameter.push_back(tok::kw_const);
-      }
-    }
+    std::vector<tok::TokenKind> QualifiersForParameter =
+        getQualifiersForParameter(PotentialPackExpansionType, &Type);
 
     if (!Type->isTemplateTypeParmType())
       continue;
 
-    const auto *TemplateTypeParameterType = dyn_cast_or_null<TemplateTypeParmType>(Type);
-    if (TemplateTypeParameterType->getIndex() != CurrentTemplateParameterBeingChecked)
+    const auto *TemplateTypeParameterType =
+        dyn_cast_or_null<TemplateTypeParmType>(Type);
+    if (TemplateTypeParameterType->getIndex() !=
+        CurrentTemplateParameterBeingChecked)
       return false;
 
     std::reverse(QualifiersForParameter.begin(), QualifiersForParameter.end());
@@ -157,33 +185,9 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(const Selection &Inputs) 
   return true;
 }
 
-#define AddReplacement(Replacement) \
-if (auto Err = Replacement.takeError()) return Err; \
-if (auto Err = Replacements.add(*Replacement)) return Err;
-
-Expected<Tweak::Effect> ConvertFunctionTemplateToAbbreviatedForm::apply(const Selection &Inputs) {
-  auto &Context = Inputs.AST->getASTContext();
-
-  tooling::Replacements Replacements{};
-
-  // Replace parameter types
-  auto TemplateParameterCount = ParameterIndices.size();
-  for (auto TemplateParameterIndex = 0u; TemplateParameterIndex < TemplateParameterCount; TemplateParameterIndex++) {
-    auto FunctionParameterReplacement = generateFunctionParameterReplacement(TemplateParameterIndex, Context);
-    AddReplacement(FunctionParameterReplacement)
-  }
-
-  // Remove template declaration
-  auto TemplateDeclarationReplacement =
-      generateTemplateDeclarationReplacement(Context);
-
-  AddReplacement(TemplateDeclarationReplacement)
-
-  return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
-}
-
 template <typename T, typename NodeKind>
-auto ConvertFunctionTemplateToAbbreviatedForm::findNode(const SelectionTree::Node &Root) -> const T * {
+auto ConvertFunctionTemplateToAbbreviatedForm::findNode(
+    const SelectionTree::Node &Root) -> const T * {
   for (const auto *Node = &Root; Node; Node = Node->Parent) {
     if (const T *Result = dyn_cast_or_null<T>(Node->ASTNode.get<NodeKind>()))
       return Result;
@@ -192,26 +196,30 @@ auto ConvertFunctionTemplateToAbbreviatedForm::findNode(const SelectionTree::Nod
   return nullptr;
 }
 
-auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacement(
-    unsigned int TemplateParameterIndex,
-    ASTContext &Context) -> llvm::Expected<tooling::Replacement> {
+auto ConvertFunctionTemplateToAbbreviatedForm::
+    generateFunctionParameterReplacement(unsigned int TemplateParameterIndex,
+                                         ASTContext &Context)
+        -> llvm::Expected<tooling::Replacement> {
   auto &SourceManager = Context.getSourceManager();
 
   auto FunctionParameterIndex = ParameterIndices[TemplateParameterIndex];
   auto *TypeConstraint = TypeConstraints[TemplateParameterIndex];
 
-  auto *Parameter = FunctionTemplateDeclaration->getAsFunction()->getParamDecl(FunctionParameterIndex);
+  auto *Parameter = FunctionTemplateDeclaration->getAsFunction()->getParamDecl(
+      FunctionParameterIndex);
   auto ParameterName = Parameter->getDeclName().getAsString();
 
   // TODO: Maybe find a better name for this
   std::vector<std::string> ParameterTokens{};
 
   if (TypeConstraint != nullptr) {
-    auto ConceptName = TypeConstraint->getNamedConcept()->getQualifiedNameAsString();
+    auto ConceptName =
+        TypeConstraint->getNamedConcept()->getQualifiedNameAsString();
     ParameterTokens.push_back(ConceptName);
 
     if (const auto *TemplateArgs = TypeConstraint->getTemplateArgsAsWritten()) {
-      auto TemplateArgsRange = SourceRange(TemplateArgs->getLAngleLoc(), TemplateArgs->getRAngleLoc());
+      auto TemplateArgsRange = SourceRange(TemplateArgs->getLAngleLoc(),
+                                           TemplateArgs->getRAngleLoc());
       auto TemplateArgsSource = toSourceCode(SourceManager, TemplateArgsRange);
       ParameterTokens.push_back(TemplateArgsSource.str() + '>');
     }
@@ -223,7 +231,8 @@ auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacem
   for (const auto &Qualifier : Qualifiers[TemplateParameterIndex]) {
     if (const auto *KeywordSpelling = getKeywordSpelling(Qualifier)) {
       ParameterTokens.push_back(KeywordSpelling);
-    } else if (const auto *PunctuatorSpelling = getPunctuatorSpelling(Qualifier)) {
+    } else if (const auto *PunctuatorSpelling =
+                   getPunctuatorSpelling(Qualifier)) {
       ParameterTokens.push_back(PunctuatorSpelling);
     }
 
@@ -232,27 +241,28 @@ auto ConvertFunctionTemplateToAbbreviatedForm::generateFunctionParameterReplacem
 
   ParameterTokens.push_back(ParameterName);
 
-  auto FunctionTypeReplacementText = std::accumulate(ParameterTokens.begin(), ParameterTokens.end(), std::string{}, [](auto Result, auto Token) {
-    return Result + " " + Token;
-  });
+  auto FunctionTypeReplacementText = std::accumulate(
+      ParameterTokens.begin(), ParameterTokens.end(), std::string{},
+      [](auto Result, auto Token) { return Result + " " + Token; });
 
-  auto FunctionParameterRange =
-      toHalfOpenFileRange(SourceManager, Context.getLangOpts(), Parameter->getSourceRange());
+  auto FunctionParameterRange = toHalfOpenFileRange(
+      SourceManager, Context.getLangOpts(), Parameter->getSourceRange());
 
   if (!FunctionParameterRange)
     return error("Could not obtain range of the template parameter. Macros?");
 
   // Replaces `typename T` with `auto`
   return tooling::Replacement(
-      SourceManager,
-      CharSourceRange::getCharRange(*FunctionParameterRange),
+      SourceManager, CharSourceRange::getCharRange(*FunctionParameterRange),
       FunctionTypeReplacementText);
 }
 
-auto ConvertFunctionTemplateToAbbreviatedForm::generateTemplateDeclarationReplacement(
-    ASTContext &Context) -> llvm::Expected<tooling::Replacement> {
+auto ConvertFunctionTemplateToAbbreviatedForm::
+    generateTemplateDeclarationReplacement(ASTContext &Context)
+        -> llvm::Expected<tooling::Replacement> {
   auto &SourceManager = Context.getSourceManager();
-  auto *TemplateParameters = FunctionTemplateDeclaration->getTemplateParameters();
+  auto *TemplateParameters =
+      FunctionTemplateDeclaration->getTemplateParameters();
 
   auto TemplateDeclarationRange =
       toHalfOpenFileRange(SourceManager, Context.getLangOpts(),
@@ -262,9 +272,42 @@ auto ConvertFunctionTemplateToAbbreviatedForm::generateTemplateDeclarationReplac
     return error("Could not obtain range of the template parameter. Macros?");
 
   return tooling::Replacement(
-      SourceManager,
-      CharSourceRange::getCharRange(*TemplateDeclarationRange),
+      SourceManager, CharSourceRange::getCharRange(*TemplateDeclarationRange),
       "");
+}
+
+auto ConvertFunctionTemplateToAbbreviatedForm::getQualifiersForParameter(
+    QualType PotentialPackExpansionType, QualType *Type)
+    -> std::vector<tok::TokenKind> {
+  std::vector<tok::TokenKind> QualifiersForParameter{};
+
+  if (isa_and_nonnull<PackExpansionType>(PotentialPackExpansionType))
+    QualifiersForParameter.push_back(tok::ellipsis);
+
+  if ((*Type)->isRValueReferenceType()) {
+    QualifiersForParameter.push_back(tok::ampamp);
+    *Type = Type->getNonReferenceType();
+  }
+
+  if ((*Type)->isLValueReferenceType()) {
+    QualifiersForParameter.push_back(tok::amp);
+    *Type = Type->getNonReferenceType();
+  }
+
+  if ((*Type).isConstQualified()) {
+    QualifiersForParameter.push_back(tok::kw_const);
+  }
+
+  while ((*Type)->isPointerType()) {
+    QualifiersForParameter.push_back(tok::star);
+    *Type = (*Type)->getPointeeType();
+
+    if ((*Type).isConstQualified()) {
+      QualifiersForParameter.push_back(tok::kw_const);
+    }
+  }
+
+  return QualifiersForParameter;
 }
 
 } // namespace
