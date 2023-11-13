@@ -27,26 +27,43 @@ TEST_F(ConvertFunctionTemplateToAbbreviatedFormTest, Test) {
       concept baz = true;
 
       template <typename T>
-      class list<T>;
+      class list;
   )cpp";
 
   ExtraArgs = {"-std=c++20"};
 
   EXPECT_EQ(apply("template <typename T> auto ^fun(T param) {}"),
-                  " auto fun(auto param) {}");
-//  EXPECT_EQ(apply("template <typename...ArgTypes> auto f^o^o(ArgTypes...params) -> void{}"),
-//                  "auto foo(auto...params) -> void{}");
+                  " auto fun( auto param) {}");
+  EXPECT_EQ(apply("template <foo T> auto ^fun(T param) {}"),
+            " auto fun( foo auto param) {}");
+  EXPECT_EQ(apply("template <baz<int> T> auto ^fun(T param) {}"),
+            " auto fun( baz <int> auto param) {}");
+  EXPECT_EQ(apply("template <foo T, bar U> auto ^fun(T param1, U param2) {}"),
+            " auto fun( foo auto param1,  bar auto param2) {}");
+  EXPECT_EQ(apply("template <foo T> auto ^fun(T const ** param) {}"),
+            " auto fun( foo auto const * * param) {}");
+  EXPECT_EQ(apply("template <typename...ArgTypes> auto ^fun(ArgTypes...params) -> void{}"),
+                  " auto fun( auto ... params) -> void{}");
 
-  EXPECT_AVAILABLE("tem^plate <type^name ^T> auto f^un(^T pa^ram) {}");
-  EXPECT_AVAILABLE("tem^plate <f^oo ^T> auto fu^n(^T pa^ram) -> void {}");
-//  EXPECT_AVAILABLE("tem^plate <fo^o T> auto fu^n(^T const ** pa^ram) -> void {}");
-//  EXPECT_AVAILABLE("template <typename...ArgTypes> auto f^o^o(ArgTypes...params) -> void{}");
+  EXPECT_AVAILABLE("t^e^m^p^l^a^t^e <^t^y^p^e^n^a^m^e ^T> a^u^t^o f^u^n^(^T p^a^r^a^m^) {}");
+  EXPECT_AVAILABLE("t^e^m^p^l^a^t^e <f^o^o ^T> a^u^t^o f^u^n^(^T p^a^r^a^m^) -> void {}");
+  EXPECT_AVAILABLE("t^e^m^p^l^a^t^e <f^o^o ^T> a^u^t^o f^u^n^(^T const ** p^a^r^a^m) -> void {}");
+  EXPECT_AVAILABLE("t^e^m^p^l^a^t^e <t^y^p^e^n^a^m^e...ArgTypes> auto f^u^n(^A^rgT^y^p^e^s...^p^a^r^a^m^s^) -> void{}");
 
-  // Not possible to have `auto` within collections
+  // No possible to click on `const`
+  EXPECT_UNAVAILABLE("template<typename T> auto fun(T c^o^n^s^t param) -> void {}");
+
+  // The keyword `auto` can't be used within containers
   EXPECT_UNAVAILABLE("template<typename T> auto f^u^n(list<T> param) -> void {}");
-  EXPECT_UNAVAILABLE("template<typename T> auto f^u^n(list<T> param) -> void {}");
 
-  EXPECT_UNAVAILABLE("tem^plate<type^name ^T, typename ^U> auto f^un(^U, ^T) -> void {}");
+  // Template parameters need to be in the same order as function parameters
+  EXPECT_UNAVAILABLE("tem^plate<type^name ^T, typen^ame ^U> auto f^un(^U, ^T) -> void {}");
+
+  // Template parameter type can't be used within the function body
+  EXPECT_UNAVAILABLE(R"cpp(
+    template<class T, int N>
+    auto fun(T (&a)[N], int size) -> void {}
+  )cpp");
 }
 
 } // namespace
