@@ -58,7 +58,7 @@ private:
   auto generateTemplateDeclarationReplacement(ASTContext &)
       -> llvm::Expected<tooling::Replacement>;
 
-  auto getQualifiersForType(QualType *Type) -> std::vector<tok::TokenKind>;
+  auto getQualifiersForType(QualType &Type) -> std::vector<tok::TokenKind>;
 
   template <typename T>
   static auto findDeclaration(const SelectionTree::Node &Root) -> const T * {
@@ -117,7 +117,7 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(
   return traverseParameters(TemplateParameters);
 }
 
-#define AddReplacement(Replacement)                                            \
+#define ADD_REPLACEMENT(Replacement) \
   if (auto Err = Replacement.takeError())                                      \
     return Err;                                                                \
   if (auto Err = Replacements.add(*Replacement))                               \
@@ -136,16 +136,16 @@ ConvertFunctionTemplateToAbbreviatedForm::apply(const Selection &Inputs) {
        TemplateParameterIndex++) {
     auto FunctionParameterReplacement =
         generateFunctionParameterReplacement(TemplateParameterIndex, Context);
-    AddReplacement(FunctionParameterReplacement)
+    ADD_REPLACEMENT(FunctionParameterReplacement)
   }
 
   // Remove template declaration
   auto TemplateDeclarationReplacement =
       generateTemplateDeclarationReplacement(Context);
 
-  AddReplacement(TemplateDeclarationReplacement)
+  ADD_REPLACEMENT(TemplateDeclarationReplacement)
 
-      return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
+  return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
 
 auto ConvertFunctionTemplateToAbbreviatedForm::traverseParameters(
@@ -156,7 +156,8 @@ auto ConvertFunctionTemplateToAbbreviatedForm::traverseParameters(
        ParameterIndex++) {
     auto Type = Parameters[ParameterIndex]->getType();
 
-    std::vector<tok::TokenKind> QualifiersForType = getQualifiersForType(&Type);
+    // TODO: Find better name for getQualifiersForType which indicates that it modifies the argument
+    auto QualifiersForType = getQualifiersForType(Type);
 
     if (!Type->isTemplateTypeParmType())
       continue;
@@ -175,10 +176,7 @@ auto ConvertFunctionTemplateToAbbreviatedForm::traverseParameters(
   }
 
   // All defined template parameters need to be used as function parameters
-  if (CurrentTemplateParameterBeingChecked != TemplateParameters->size())
-    return false;
-
-  return true;
+  return CurrentTemplateParameterBeingChecked == TemplateParameters->size();
 }
 
 template <typename T, typename NodeKind>
@@ -272,34 +270,35 @@ auto ConvertFunctionTemplateToAbbreviatedForm::
       "");
 }
 
+// TODO: Make static
 auto ConvertFunctionTemplateToAbbreviatedForm::getQualifiersForType(
-    QualType *Type) -> std::vector<tok::TokenKind> {
+    QualType &Type) -> std::vector<tok::TokenKind> {
   std::vector<tok::TokenKind> QualifiersForType{};
 
-  if (isa_and_nonnull<PackExpansionType>(*Type))
+  if (isa<PackExpansionType>(Type))
     QualifiersForType.push_back(tok::ellipsis);
 
-  *Type = Type->getNonPackExpansionType();
+  Type = Type.getNonPackExpansionType();
 
-  if ((*Type)->isRValueReferenceType()) {
+  if (Type->isRValueReferenceType()) {
     QualifiersForType.push_back(tok::ampamp);
-    *Type = Type->getNonReferenceType();
+    Type = Type.getNonReferenceType();
   }
 
-  if ((*Type)->isLValueReferenceType()) {
+  if (Type->isLValueReferenceType()) {
     QualifiersForType.push_back(tok::amp);
-    *Type = Type->getNonReferenceType();
+    Type = Type.getNonReferenceType();
   }
 
-  if ((*Type).isConstQualified()) {
+  if (Type.isConstQualified()) {
     QualifiersForType.push_back(tok::kw_const);
   }
 
-  while ((*Type)->isPointerType()) {
+  while (Type->isPointerType()) {
     QualifiersForType.push_back(tok::star);
-    *Type = (*Type)->getPointeeType();
+    Type = Type->getPointeeType();
 
-    if ((*Type).isConstQualified()) {
+    if (Type.isConstQualified()) {
       QualifiersForType.push_back(tok::kw_const);
     }
   }
