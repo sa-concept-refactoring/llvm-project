@@ -61,8 +61,8 @@ TEST_F(ConvertFunctionTemplateToAbbreviatedFormTest, Test) {
 
   // Template parameter type can't be used within the function body
   EXPECT_UNAVAILABLE(R"cpp(
-    template<class T, int N>
-    auto fun(T (&a)[N], int size) -> void {}
+    templ^ate<cl^ass T, in^t N>
+    aut^o fu^n(T (&^a)[N], i^nt siz^e) -> v^oid {}
   )cpp");
 }
 
