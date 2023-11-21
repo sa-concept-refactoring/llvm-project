@@ -163,9 +163,7 @@ auto ConvertFunctionTemplateToAbbreviatedForm::traverseParameters(
 
   for (auto ParameterIndex = 0u; ParameterIndex < Parameters.size();
        ParameterIndex++) {
-    QualType RawType;
-    std::vector<tok::TokenKind> QualifiersForType;
-    std::tie(RawType, QualifiersForType) =
+    auto [RawType, QualifiersForType] =
         deconstructType(Parameters[ParameterIndex]->getType());
 
     if (!RawType->isTemplateTypeParmType())
