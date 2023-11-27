@@ -1,4 +1,4 @@
-//===-- ConvertFunctionTemplateToAbbreviatedFormTests.cpp -------*- C++ -*-===//
+//===-- AbbreviateFunctionTemplateTests.cpp -------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -13,9 +13,9 @@ namespace clang {
 namespace clangd {
 namespace {
 
-TWEAK_TEST(ConvertFunctionTemplateToAbbreviatedForm);
+TWEAK_TEST(AbbreviateFunctionTemplate);
 
-TEST_F(ConvertFunctionTemplateToAbbreviatedFormTest, Test) {
+TEST_F(AbbreviateFunctionTemplateTest, Test) {
   Header = R"cpp(
       template <typename T>
       concept foo = true;

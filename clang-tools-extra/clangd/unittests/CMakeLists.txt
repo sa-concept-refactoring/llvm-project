@@ -114,9 +114,9 @@ add_unittest(ClangdUnitTests ClangdTests
   support/ThreadingTests.cpp
   support/TraceTests.cpp
 
+  tweaks/AbbreviateFunctionTemplateTests.cpp
   tweaks/AddUsingTests.cpp
   tweaks/AnnotateHighlightingsTests.cpp
-  tweaks/ConvertFunctionTemplateToAbbreviatedFormTests.cpp
   tweaks/DefineInlineTests.cpp
   tweaks/DefineOutlineTests.cpp
   tweaks/DumpASTTests.cpp

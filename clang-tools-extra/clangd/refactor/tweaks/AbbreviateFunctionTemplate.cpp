@@ -1,4 +1,4 @@
-//===--- ConvertFunctionTemplateToAbbreviatedForm.cpp ------------*- C++-*-===//
+//===--- AbbreviateFunctionTemplate.cpp ------------*- C++-*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -28,7 +28,7 @@ namespace {
 ///          ^^^^^^^^^^^
 /// After:
 ///     auto foo(std::integral auto param) { }
-class ConvertFunctionTemplateToAbbreviatedForm : public Tweak {
+class AbbreviateFunctionTemplate : public Tweak {
 public:
   const char *id() const final;
 
@@ -71,10 +71,9 @@ private:
   static auto findNode(const SelectionTree::Node &Root) -> const T *;
 };
 
-REGISTER_TWEAK(ConvertFunctionTemplateToAbbreviatedForm)
+REGISTER_TWEAK(AbbreviateFunctionTemplate)
 
-bool ConvertFunctionTemplateToAbbreviatedForm::prepare(
-    const Selection &Inputs) {
+bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
   const auto *Root = Inputs.ASTSelection.commonAncestor();
   if (!Root)
     return false;
@@ -122,7 +121,7 @@ bool ConvertFunctionTemplateToAbbreviatedForm::prepare(
   return traverseParameters(NumberOfTemplateParameters);
 }
 
-auto ConvertFunctionTemplateToAbbreviatedForm::apply(const Selection &Inputs)
+auto AbbreviateFunctionTemplate::apply(const Selection &Inputs)
     -> Expected<Tweak::Effect> {
   auto &Context = Inputs.AST->getASTContext();
 
@@ -156,7 +155,7 @@ auto ConvertFunctionTemplateToAbbreviatedForm::apply(const Selection &Inputs)
   return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
 
-auto ConvertFunctionTemplateToAbbreviatedForm::traverseParameters(
+auto AbbreviateFunctionTemplate::traverseParameters(
     size_t NumberOfTemplateParameters) -> bool {
   auto CurrentTemplateParameterBeingChecked = 0u;
   auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
@@ -185,8 +184,8 @@ auto ConvertFunctionTemplateToAbbreviatedForm::traverseParameters(
 }
 
 template <typename T, typename NodeKind>
-auto ConvertFunctionTemplateToAbbreviatedForm::findNode(
-    const SelectionTree::Node &Root) -> const T * {
+auto AbbreviateFunctionTemplate::findNode(const SelectionTree::Node &Root)
+    -> const T * {
   for (const auto *Node = &Root; Node; Node = Node->Parent) {
     if (const T *Result = dyn_cast_or_null<T>(Node->ASTNode.get<NodeKind>()))
       return Result;
@@ -195,10 +194,9 @@ auto ConvertFunctionTemplateToAbbreviatedForm::findNode(
   return nullptr;
 }
 
-auto ConvertFunctionTemplateToAbbreviatedForm::
-    generateFunctionParameterReplacement(unsigned int TemplateParameterIndex,
-                                         ASTContext &Context)
-        -> llvm::Expected<tooling::Replacement> {
+auto AbbreviateFunctionTemplate::generateFunctionParameterReplacement(
+    unsigned int TemplateParameterIndex, ASTContext &Context)
+    -> llvm::Expected<tooling::Replacement> {
   auto &SourceManager = Context.getSourceManager();
 
   auto FunctionParameterIndex = ParameterIndices[TemplateParameterIndex];
@@ -253,9 +251,8 @@ auto ConvertFunctionTemplateToAbbreviatedForm::
       FunctionTypeReplacementText);
 }
 
-auto ConvertFunctionTemplateToAbbreviatedForm::
-    generateTemplateDeclarationReplacement(ASTContext &Context)
-        -> llvm::Expected<tooling::Replacement> {
+auto AbbreviateFunctionTemplate::generateTemplateDeclarationReplacement(
+    ASTContext &Context) -> llvm::Expected<tooling::Replacement> {
   auto &SourceManager = Context.getSourceManager();
   auto *TemplateParameters =
       FunctionTemplateDeclaration->getTemplateParameters();
@@ -271,7 +268,7 @@ auto ConvertFunctionTemplateToAbbreviatedForm::
   return tooling::Replacement(SourceManager, CharRange, "");
 }
 
-auto ConvertFunctionTemplateToAbbreviatedForm::deconstructType(QualType Type)
+auto AbbreviateFunctionTemplate::deconstructType(QualType Type)
     -> std::tuple<QualType, std::vector<tok::TokenKind>> {
   std::vector<tok::TokenKind> Qualifiers{};
 
