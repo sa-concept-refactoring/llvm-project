@@ -1,4 +1,4 @@
-//===--- AbbreviateFunctionTemplate.cpp ------------*- C++-*-===//
+//===-- AbbreviateFunctionTemplate.cpp ---------------------------*- C++-*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -36,7 +36,7 @@ public:
   auto apply(const Selection &Inputs) -> Expected<Effect> override;
 
   auto title() const -> std::string override {
-    return "Convert function template to abbreviated form";
+    return "Abbreviate function template";
   }
 
   auto kind() const -> llvm::StringLiteral override {
