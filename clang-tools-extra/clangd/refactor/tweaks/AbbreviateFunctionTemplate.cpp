@@ -44,7 +44,7 @@ public:
   }
 
 private:
-  const char *AutoKeywordSpelling = getKeywordSpelling(tok::kw_auto);
+  static const char *AutoKeywordSpelling;
   const FunctionTemplateDecl *FunctionTemplateDeclaration;
 
   std::vector<const TypeConstraint *> TypeConstraints;
@@ -53,7 +53,7 @@ private:
 
   auto traverseParameters(size_t NumberOfTemplateParameters) -> bool;
 
-  auto generateFunctionParameterReplacement(unsigned int, ASTContext &Context)
+  auto generateFunctionParameterReplacement(unsigned, ASTContext &Context)
       -> llvm::Expected<tooling::Replacement>;
 
   auto generateTemplateDeclarationReplacement(ASTContext &Context)
@@ -72,6 +72,8 @@ private:
 };
 
 REGISTER_TWEAK(AbbreviateFunctionTemplate)
+
+const char *AbbreviateFunctionTemplate::AutoKeywordSpelling = getKeywordSpelling(tok::kw_auto);
 
 bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
   const auto *Root = Inputs.ASTSelection.commonAncestor();
@@ -158,12 +160,12 @@ auto AbbreviateFunctionTemplate::apply(const Selection &Inputs)
 auto AbbreviateFunctionTemplate::traverseParameters(
     size_t NumberOfTemplateParameters) -> bool {
   auto CurrentTemplateParameterBeingChecked = 0u;
-  auto Parameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
+  auto FunctionParameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
 
-  for (auto ParameterIndex = 0u; ParameterIndex < Parameters.size();
+  for (auto ParameterIndex = 0u; ParameterIndex < FunctionParameters.size();
        ParameterIndex++) {
     auto [RawType, QualifiersForType] =
-        deconstructType(Parameters[ParameterIndex]->getType());
+        deconstructType(FunctionParameters[ParameterIndex]->getType());
 
     if (!RawType->isTemplateTypeParmType())
       continue;
@@ -176,7 +178,7 @@ auto AbbreviateFunctionTemplate::traverseParameters(
 
     Qualifiers.push_back(QualifiersForType);
     ParameterIndices.push_back(ParameterIndex);
-    CurrentTemplateParameterBeingChecked += 1;
+    CurrentTemplateParameterBeingChecked++;
   }
 
   // All defined template parameters need to be used as function parameters
@@ -195,7 +197,7 @@ auto AbbreviateFunctionTemplate::findNode(const SelectionTree::Node &Root)
 }
 
 auto AbbreviateFunctionTemplate::generateFunctionParameterReplacement(
-    unsigned int TemplateParameterIndex, ASTContext &Context)
+    unsigned TemplateParameterIndex, ASTContext &Context)
     -> llvm::Expected<tooling::Replacement> {
   auto &SourceManager = Context.getSourceManager();
 
