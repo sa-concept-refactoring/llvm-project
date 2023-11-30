@@ -36,7 +36,7 @@ public:
   auto apply(const Selection &Inputs) -> Expected<Effect> override;
 
   auto title() const -> std::string override {
-    return "Abbreviate function template";
+    return llvm::formatv("Abbreviate function template");
   }
 
   auto kind() const -> llvm::StringLiteral override {
