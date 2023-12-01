@@ -53,6 +53,8 @@ private:
 
   auto traverseParameters(size_t NumberOfTemplateParameters) -> bool;
 
+  auto generateFunctionParameterReplacements(ASTContext &Context)
+      -> llvm::Expected<tooling::Replacements>;
   auto generateFunctionParameterReplacement(unsigned, ASTContext &Context)
       -> llvm::Expected<tooling::Replacement>;
 
@@ -73,7 +75,8 @@ private:
 
 REGISTER_TWEAK(AbbreviateFunctionTemplate)
 
-const char *AbbreviateFunctionTemplate::AutoKeywordSpelling = getKeywordSpelling(tok::kw_auto);
+const char *AbbreviateFunctionTemplate::AutoKeywordSpelling =
+    getKeywordSpelling(tok::kw_auto);
 
 bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
   const auto *Root = Inputs.ASTSelection.commonAncestor();
@@ -126,25 +129,12 @@ bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
 auto AbbreviateFunctionTemplate::apply(const Selection &Inputs)
     -> Expected<Tweak::Effect> {
   auto &Context = Inputs.AST->getASTContext();
+  auto FunctionParameterReplacements = generateFunctionParameterReplacements(Context);
 
-  tooling::Replacements Replacements{};
+  if (auto Err = FunctionParameterReplacements.takeError())
+    return Err;
 
-  // Replace parameter type declaration
-  auto TemplateParameterCount = ParameterIndices.size();
-  for (auto TemplateParameterIndex = 0u;
-       TemplateParameterIndex < TemplateParameterCount;
-       TemplateParameterIndex++) {
-    auto FunctionParameterReplacement =
-        generateFunctionParameterReplacement(TemplateParameterIndex, Context);
-
-    if (auto Err = FunctionParameterReplacement.takeError())
-      return Err;
-
-    if (auto Err = Replacements.add(*FunctionParameterReplacement))
-      return Err;
-  }
-
-  // Remove template declaration
+  auto Replacements = *FunctionParameterReplacements;
   auto TemplateDeclarationReplacement =
       generateTemplateDeclarationReplacement(Context);
 
@@ -160,7 +150,8 @@ auto AbbreviateFunctionTemplate::apply(const Selection &Inputs)
 auto AbbreviateFunctionTemplate::traverseParameters(
     size_t NumberOfTemplateParameters) -> bool {
   auto CurrentTemplateParameterBeingChecked = 0u;
-  auto FunctionParameters = FunctionTemplateDeclaration->getAsFunction()->parameters();
+  auto FunctionParameters =
+      FunctionTemplateDeclaration->getAsFunction()->parameters();
 
   for (auto ParameterIndex = 0u; ParameterIndex < FunctionParameters.size();
        ParameterIndex++) {
@@ -194,6 +185,25 @@ auto AbbreviateFunctionTemplate::findNode(const SelectionTree::Node &Root)
   }
 
   return nullptr;
+}
+
+auto AbbreviateFunctionTemplate::generateFunctionParameterReplacements(
+    ASTContext &Context) -> llvm::Expected<tooling::Replacements> {
+  tooling::Replacements Replacements;
+  for (auto TemplateParameterIndex = 0u;
+       TemplateParameterIndex < ParameterIndices.size();
+       TemplateParameterIndex++) {
+    auto FunctionParameterReplacement =
+        generateFunctionParameterReplacement(TemplateParameterIndex, Context);
+
+    if (auto Err = FunctionParameterReplacement.takeError())
+      return Err;
+
+    if (auto Err = Replacements.add(*FunctionParameterReplacement))
+      return Err;
+  }
+
+  return Replacements;
 }
 
 auto AbbreviateFunctionTemplate::generateFunctionParameterReplacement(
