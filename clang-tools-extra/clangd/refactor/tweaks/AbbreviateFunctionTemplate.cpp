@@ -69,7 +69,8 @@ private:
       -> llvm::Expected<tooling::Replacement>;
 
   static auto deconstructType(QualType Type)
-      -> std::tuple<QualType, std::vector<tok::TokenKind>, std::vector<tok::TokenKind>>;
+      -> std::tuple<QualType, std::vector<tok::TokenKind>,
+                    std::vector<tok::TokenKind>>;
 };
 
 REGISTER_TWEAK(AbbreviateFunctionTemplate)
@@ -191,7 +192,8 @@ auto AbbreviateFunctionTemplate::traverseFunctionParameters(
     auto *TemplateParameterInfo =
         &TemplateParameterInfoList[TemplateParameterIndex];
     TemplateParameterInfo->FunctionParameterIndex = ParameterIndex;
-    TemplateParameterInfo->FunctionParameterTypeQualifiers = ParameterTypeQualifiers;
+    TemplateParameterInfo->FunctionParameterTypeQualifiers =
+        ParameterTypeQualifiers;
     TemplateParameterInfo->FunctionParameterQualifiers = ParameterQualifiers;
 
     CurrentTemplateParameterBeingChecked++;
@@ -262,7 +264,7 @@ auto AbbreviateFunctionTemplate::generateFunctionParameterReplacement(
 
   // TODO: Extract
   for (const auto &Qualifier :
-      TemplateParameterInfo.FunctionParameterQualifiers) {
+       TemplateParameterInfo.FunctionParameterQualifiers) {
     const char *Spelling = getKeywordSpelling(Qualifier);
 
     if (!Spelling)
@@ -305,7 +307,8 @@ auto AbbreviateFunctionTemplate::generateTemplateDeclarationReplacement(
 }
 
 auto AbbreviateFunctionTemplate::deconstructType(QualType Type)
-    -> std::tuple<QualType, std::vector<tok::TokenKind>, std::vector<tok::TokenKind>> {
+    -> std::tuple<QualType, std::vector<tok::TokenKind>,
+                  std::vector<tok::TokenKind>> {
   std::vector<tok::TokenKind> ParameterTypeQualifiers{};
   std::vector<tok::TokenKind> ParameterQualifiers{};
 
