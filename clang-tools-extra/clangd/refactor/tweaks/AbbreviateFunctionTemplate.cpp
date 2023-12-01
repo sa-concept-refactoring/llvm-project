@@ -79,11 +79,12 @@ const char *AbbreviateFunctionTemplate::AutoKeywordSpelling =
     getKeywordSpelling(tok::kw_auto);
 
 bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
-  const auto *Root = Inputs.ASTSelection.commonAncestor();
-  if (!Root)
+  const auto *CommonAncestor = Inputs.ASTSelection.commonAncestor();
+  if (!CommonAncestor)
     return false;
 
-  FunctionTemplateDeclaration = findDeclaration<FunctionTemplateDecl>(*Root);
+  FunctionTemplateDeclaration =
+      findDeclaration<FunctionTemplateDecl>(*CommonAncestor);
   if (!FunctionTemplateDeclaration)
     return false;
 
