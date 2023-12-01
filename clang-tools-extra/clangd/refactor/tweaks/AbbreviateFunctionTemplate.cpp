@@ -51,6 +51,7 @@ private:
     const TypeConstraint *Constraint;
     unsigned int FunctionParameterIndex;
     std::vector<tok::TokenKind> FunctionParameterQualifiers;
+    std::vector<tok::TokenKind> FunctionParameterTypeQualifiers;
   };
 
   std::vector<TemplateParameterInfo> TemplateParameterInfoList;
@@ -68,7 +69,7 @@ private:
       -> llvm::Expected<tooling::Replacement>;
 
   static auto deconstructType(QualType Type)
-      -> std::tuple<QualType, std::vector<tok::TokenKind>>;
+      -> std::tuple<QualType, std::vector<tok::TokenKind>, std::vector<tok::TokenKind>>;
 };
 
 REGISTER_TWEAK(AbbreviateFunctionTemplate)
@@ -175,8 +176,8 @@ auto AbbreviateFunctionTemplate::traverseFunctionParameters(
 
   for (auto ParameterIndex = 0u; ParameterIndex < FunctionParameters.size();
        ParameterIndex++) {
-    auto [RawType, QualifiersForType] =
-        deconstructType(FunctionParameters[ParameterIndex]->getType());
+    auto [RawType, ParameterTypeQualifiers, ParameterQualifiers] =
+        deconstructType(FunctionParameters[ParameterIndex]->getOriginalType());
 
     if (!RawType->isTemplateTypeParmType())
       continue;
@@ -190,7 +191,8 @@ auto AbbreviateFunctionTemplate::traverseFunctionParameters(
     auto *TemplateParameterInfo =
         &TemplateParameterInfoList[TemplateParameterIndex];
     TemplateParameterInfo->FunctionParameterIndex = ParameterIndex;
-    TemplateParameterInfo->FunctionParameterQualifiers = QualifiersForType;
+    TemplateParameterInfo->FunctionParameterTypeQualifiers = ParameterTypeQualifiers;
+    TemplateParameterInfo->FunctionParameterQualifiers = ParameterQualifiers;
 
     CurrentTemplateParameterBeingChecked++;
   }
@@ -244,8 +246,9 @@ auto AbbreviateFunctionTemplate::generateFunctionParameterReplacement(
 
   ParameterTokens.push_back(AutoKeywordSpelling);
 
+  // TODO: Extract
   for (const auto &Qualifier :
-       TemplateParameterInfo.FunctionParameterQualifiers) {
+       TemplateParameterInfo.FunctionParameterTypeQualifiers) {
     const char *Spelling = getKeywordSpelling(Qualifier);
 
     if (!Spelling)
@@ -256,6 +259,18 @@ auto AbbreviateFunctionTemplate::generateFunctionParameterReplacement(
   }
 
   ParameterTokens.push_back(ParameterName);
+
+  // TODO: Extract
+  for (const auto &Qualifier :
+      TemplateParameterInfo.FunctionParameterQualifiers) {
+    const char *Spelling = getKeywordSpelling(Qualifier);
+
+    if (!Spelling)
+      Spelling = getPunctuatorSpelling(Qualifier);
+
+    if (Spelling)
+      ParameterTokens.push_back(Spelling);
+  }
 
   auto FunctionTypeReplacementText = std::accumulate(
       ParameterTokens.begin(), ParameterTokens.end(), std::string{},
@@ -290,40 +305,47 @@ auto AbbreviateFunctionTemplate::generateTemplateDeclarationReplacement(
 }
 
 auto AbbreviateFunctionTemplate::deconstructType(QualType Type)
-    -> std::tuple<QualType, std::vector<tok::TokenKind>> {
-  std::vector<tok::TokenKind> Qualifiers{};
+    -> std::tuple<QualType, std::vector<tok::TokenKind>, std::vector<tok::TokenKind>> {
+  std::vector<tok::TokenKind> ParameterTypeQualifiers{};
+  std::vector<tok::TokenKind> ParameterQualifiers{};
+
+  if (Type->isIncompleteArrayType()) {
+    ParameterQualifiers.push_back(tok::l_square);
+    ParameterQualifiers.push_back(tok::r_square);
+    Type = Type->castAsArrayTypeUnsafe()->getElementType();
+  }
 
   if (isa<PackExpansionType>(Type))
-    Qualifiers.push_back(tok::ellipsis);
+    ParameterTypeQualifiers.push_back(tok::ellipsis);
 
   Type = Type.getNonPackExpansionType();
 
   if (Type->isRValueReferenceType()) {
-    Qualifiers.push_back(tok::ampamp);
+    ParameterTypeQualifiers.push_back(tok::ampamp);
     Type = Type.getNonReferenceType();
   }
 
   if (Type->isLValueReferenceType()) {
-    Qualifiers.push_back(tok::amp);
+    ParameterTypeQualifiers.push_back(tok::amp);
     Type = Type.getNonReferenceType();
   }
 
   if (Type.isConstQualified()) {
-    Qualifiers.push_back(tok::kw_const);
+    ParameterTypeQualifiers.push_back(tok::kw_const);
   }
 
   while (Type->isPointerType()) {
-    Qualifiers.push_back(tok::star);
+    ParameterTypeQualifiers.push_back(tok::star);
     Type = Type->getPointeeType();
 
     if (Type.isConstQualified()) {
-      Qualifiers.push_back(tok::kw_const);
+      ParameterTypeQualifiers.push_back(tok::kw_const);
     }
   }
 
-  std::reverse(Qualifiers.begin(), Qualifiers.end());
+  std::reverse(ParameterTypeQualifiers.begin(), ParameterTypeQualifiers.end());
 
-  return {Type, Qualifiers};
+  return {Type, ParameterTypeQualifiers, ParameterQualifiers};
 }
 
 } // namespace
