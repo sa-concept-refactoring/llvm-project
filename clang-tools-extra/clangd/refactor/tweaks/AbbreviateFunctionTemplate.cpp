@@ -47,18 +47,24 @@ private:
   static const char *AutoKeywordSpelling;
   const FunctionTemplateDecl *FunctionTemplateDeclaration;
 
-  std::vector<const TypeConstraint *> TypeConstraints;
-  std::vector<unsigned int> ParameterIndices;
-  std::vector<std::vector<tok::TokenKind>> Qualifiers;
+  struct TemplateParameterInfo {
+    const TypeConstraint *Constraint;
+    unsigned int FunctionParameterIndex;
+    std::vector<tok::TokenKind> FunctionParameterQualifiers;
+  };
+
+  std::vector<TemplateParameterInfo> TemplateParameterInfoList;
 
   auto traverseParameters(size_t NumberOfTemplateParameters) -> bool;
 
-  auto generateFunctionParameterReplacements(ASTContext &Context)
+  auto generateFunctionParameterReplacements(const ASTContext &Context)
       -> llvm::Expected<tooling::Replacements>;
-  auto generateFunctionParameterReplacement(unsigned, ASTContext &Context)
-      -> llvm::Expected<tooling::Replacement>;
 
-  auto generateTemplateDeclarationReplacement(ASTContext &Context)
+  auto generateFunctionParameterReplacement(
+      const TemplateParameterInfo &TemplateParameterInfo,
+      const ASTContext &Context) -> llvm::Expected<tooling::Replacement>;
+
+  auto generateTemplateDeclarationReplacement(const ASTContext &Context)
       -> llvm::Expected<tooling::Replacement>;
 
   static auto deconstructType(QualType Type)
@@ -92,9 +98,8 @@ bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
       FunctionTemplateDeclaration->getTemplateParameters();
 
   auto NumberOfTemplateParameters = TemplateParameters->size();
-  TypeConstraints.reserve(NumberOfTemplateParameters);
-  ParameterIndices.reserve(NumberOfTemplateParameters);
-  Qualifiers.reserve(NumberOfTemplateParameters);
+  TemplateParameterInfoList =
+      std::vector<TemplateParameterInfo>(NumberOfTemplateParameters);
 
   // Check how many times each template parameter is referenced.
   // Depending on the number of references it can be checked
@@ -106,14 +111,21 @@ bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
   //                interested in.
   // - more than two: The template parameter was either used for multiple
   //                  parameters or somewhere else in the function.
-  for (auto *TemplateParameter : *TemplateParameters) {
+  for (unsigned TemplateParameterIndex = 0;
+       TemplateParameterIndex < NumberOfTemplateParameters;
+       TemplateParameterIndex++) {
+    auto *TemplateParameter =
+        TemplateParameters->getParam(TemplateParameterIndex);
+    auto *TemplateParameterInfo =
+        &TemplateParameterInfoList[TemplateParameterIndex];
+
     auto *TemplateParameterDeclaration =
         dyn_cast_or_null<TemplateTypeParmDecl>(TemplateParameter);
     if (!TemplateParameterDeclaration)
       return false;
 
-    TypeConstraints.push_back(
-        TemplateParameterDeclaration->getTypeConstraint());
+    TemplateParameterInfo->Constraint =
+        TemplateParameterDeclaration->getTypeConstraint();
 
     auto TemplateParameterPosition = sourceLocToPosition(
         Inputs.AST->getSourceManager(), TemplateParameter->getEndLoc());
@@ -172,8 +184,11 @@ auto AbbreviateFunctionTemplate::traverseParameters(
     if (TemplateParameterIndex != CurrentTemplateParameterBeingChecked)
       return false;
 
-    Qualifiers.push_back(QualifiersForType);
-    ParameterIndices.push_back(ParameterIndex);
+    auto *TemplateParameterInfo =
+        &TemplateParameterInfoList[TemplateParameterIndex];
+    TemplateParameterInfo->FunctionParameterIndex = ParameterIndex;
+    TemplateParameterInfo->FunctionParameterQualifiers = QualifiersForType;
+
     CurrentTemplateParameterBeingChecked++;
   }
 
@@ -193,13 +208,11 @@ auto AbbreviateFunctionTemplate::findNode(const SelectionTree::Node &Root)
 }
 
 auto AbbreviateFunctionTemplate::generateFunctionParameterReplacements(
-    ASTContext &Context) -> llvm::Expected<tooling::Replacements> {
+    const ASTContext &Context) -> llvm::Expected<tooling::Replacements> {
   tooling::Replacements Replacements;
-  for (auto TemplateParameterIndex = 0u;
-       TemplateParameterIndex < ParameterIndices.size();
-       TemplateParameterIndex++) {
+  for (const auto &TemplateParameterInfo : TemplateParameterInfoList) {
     auto FunctionParameterReplacement =
-        generateFunctionParameterReplacement(TemplateParameterIndex, Context);
+        generateFunctionParameterReplacement(TemplateParameterInfo, Context);
 
     if (auto Err = FunctionParameterReplacement.takeError())
       return Err;
@@ -212,20 +225,18 @@ auto AbbreviateFunctionTemplate::generateFunctionParameterReplacements(
 }
 
 auto AbbreviateFunctionTemplate::generateFunctionParameterReplacement(
-    unsigned TemplateParameterIndex, ASTContext &Context)
-    -> llvm::Expected<tooling::Replacement> {
+    const TemplateParameterInfo &TemplateParameterInfo,
+    const ASTContext &Context) -> llvm::Expected<tooling::Replacement> {
   auto &SourceManager = Context.getSourceManager();
 
-  auto FunctionParameterIndex = ParameterIndices[TemplateParameterIndex];
-  auto *TypeConstraint = TypeConstraints[TemplateParameterIndex];
-
   const auto *Function = FunctionTemplateDeclaration->getAsFunction();
-  auto *Parameter = Function->getParamDecl(FunctionParameterIndex);
+  auto *Parameter =
+      Function->getParamDecl(TemplateParameterInfo.FunctionParameterIndex);
   auto ParameterName = Parameter->getDeclName().getAsString();
 
   std::vector<std::string> ParameterTokens{};
 
-  if (TypeConstraint != nullptr) {
+  if (const auto *TypeConstraint = TemplateParameterInfo.Constraint) {
     auto *ConceptReference = TypeConstraint->getConceptReference();
     auto *NamedConcept = ConceptReference->getNamedConcept();
 
@@ -241,7 +252,8 @@ auto AbbreviateFunctionTemplate::generateFunctionParameterReplacement(
 
   ParameterTokens.push_back(AutoKeywordSpelling);
 
-  for (const auto &Qualifier : Qualifiers[TemplateParameterIndex]) {
+  for (const auto &Qualifier :
+       TemplateParameterInfo.FunctionParameterQualifiers) {
     const char *Spelling = getKeywordSpelling(Qualifier);
 
     if (!Spelling)
@@ -269,7 +281,7 @@ auto AbbreviateFunctionTemplate::generateFunctionParameterReplacement(
 }
 
 auto AbbreviateFunctionTemplate::generateTemplateDeclarationReplacement(
-    ASTContext &Context) -> llvm::Expected<tooling::Replacement> {
+    const ASTContext &Context) -> llvm::Expected<tooling::Replacement> {
   auto &SourceManager = Context.getSourceManager();
   auto *TemplateParameters =
       FunctionTemplateDeclaration->getTemplateParameters();
