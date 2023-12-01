@@ -55,7 +55,7 @@ private:
 
   std::vector<TemplateParameterInfo> TemplateParameterInfoList;
 
-  auto traverseParameters(size_t NumberOfTemplateParameters) -> bool;
+  auto traverseFunctionParameters(size_t NumberOfTemplateParameters) -> bool;
 
   auto generateFunctionParameterReplacements(const ASTContext &Context)
       -> llvm::Expected<tooling::Replacements>;
@@ -69,20 +69,22 @@ private:
 
   static auto deconstructType(QualType Type)
       -> std::tuple<QualType, std::vector<tok::TokenKind>>;
-
-  template <typename T>
-  static auto findDeclaration(const SelectionTree::Node &Root) -> const T * {
-    return findNode<T, Decl>(Root);
-  }
-
-  template <typename T, typename NodeKind>
-  static auto findNode(const SelectionTree::Node &Root) -> const T *;
 };
 
 REGISTER_TWEAK(AbbreviateFunctionTemplate)
 
 const char *AbbreviateFunctionTemplate::AutoKeywordSpelling =
     getKeywordSpelling(tok::kw_auto);
+
+template <typename T>
+auto findDeclaration(const SelectionTree::Node &Root) -> const T * {
+  for (const auto *Node = &Root; Node; Node = Node->Parent) {
+    if (const T *Result = dyn_cast_or_null<T>(Node->ASTNode.get<Decl>()))
+      return Result;
+  }
+
+  return nullptr;
+}
 
 bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
   const auto *CommonAncestor = Inputs.ASTSelection.commonAncestor();
@@ -91,6 +93,7 @@ bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
 
   FunctionTemplateDeclaration =
       findDeclaration<FunctionTemplateDecl>(*CommonAncestor);
+
   if (!FunctionTemplateDeclaration)
     return false;
 
@@ -139,7 +142,7 @@ bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
       return false;
   }
 
-  return traverseParameters(NumberOfTemplateParameters);
+  return traverseFunctionParameters(NumberOfTemplateParameters);
 }
 
 auto AbbreviateFunctionTemplate::apply(const Selection &Inputs)
@@ -164,7 +167,7 @@ auto AbbreviateFunctionTemplate::apply(const Selection &Inputs)
   return Effect::mainFileEdit(Context.getSourceManager(), Replacements);
 }
 
-auto AbbreviateFunctionTemplate::traverseParameters(
+auto AbbreviateFunctionTemplate::traverseFunctionParameters(
     size_t NumberOfTemplateParameters) -> bool {
   auto CurrentTemplateParameterBeingChecked = 0u;
   auto FunctionParameters =
@@ -194,17 +197,6 @@ auto AbbreviateFunctionTemplate::traverseParameters(
 
   // All defined template parameters need to be used as function parameters
   return CurrentTemplateParameterBeingChecked == NumberOfTemplateParameters;
-}
-
-template <typename T, typename NodeKind>
-auto AbbreviateFunctionTemplate::findNode(const SelectionTree::Node &Root)
-    -> const T * {
-  for (const auto *Node = &Root; Node; Node = Node->Parent) {
-    if (const T *Result = dyn_cast_or_null<T>(Node->ASTNode.get<NodeKind>()))
-      return Result;
-  }
-
-  return nullptr;
 }
 
 auto AbbreviateFunctionTemplate::generateFunctionParameterReplacements(
