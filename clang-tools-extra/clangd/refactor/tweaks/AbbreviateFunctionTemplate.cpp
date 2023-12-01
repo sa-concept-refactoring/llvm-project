@@ -240,7 +240,7 @@ auto AbbreviateFunctionTemplate::generateFunctionParameterReplacement(
 
   auto FunctionTypeReplacementText = std::accumulate(
       ParameterTokens.begin(), ParameterTokens.end(), std::string{},
-      [](auto Result, auto Token) { return Result + " " + Token; });
+      [](auto Result, auto Token) { return std::move(Result) + " " + Token; });
 
   auto FunctionParameterRange = toHalfOpenFileRange(
       SourceManager, Context.getLangOpts(), Parameter->getSourceRange());
