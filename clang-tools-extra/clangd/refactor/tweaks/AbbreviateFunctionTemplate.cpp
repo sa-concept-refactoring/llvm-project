@@ -116,8 +116,11 @@ bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
 
     auto TemplateParameterPosition = sourceLocToPosition(
         Inputs.AST->getSourceManager(), TemplateParameter->getEndLoc());
+
+    auto FindReferencesLimit = 3;
     auto ReferencesResult =
-        findReferences(*Inputs.AST, TemplateParameterPosition, 3, Inputs.Index);
+        findReferences(*Inputs.AST, TemplateParameterPosition,
+                       FindReferencesLimit, Inputs.Index);
 
     if (ReferencesResult.References.size() != 2)
       return false;
@@ -129,7 +132,8 @@ bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
 auto AbbreviateFunctionTemplate::apply(const Selection &Inputs)
     -> Expected<Tweak::Effect> {
   auto &Context = Inputs.AST->getASTContext();
-  auto FunctionParameterReplacements = generateFunctionParameterReplacements(Context);
+  auto FunctionParameterReplacements =
+      generateFunctionParameterReplacements(Context);
 
   if (auto Err = FunctionParameterReplacements.takeError())
     return Err;
