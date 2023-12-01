@@ -40,6 +40,8 @@ TEST_F(AbbreviateFunctionTemplateTest, Test) {
             " auto fun( foo auto ) {}");
   EXPECT_EQ(apply("template <foo T> auto ^fun(T[]) {}"),
             " auto fun( foo auto  [ ]) {}");
+  EXPECT_EQ(apply("template <foo T> auto ^fun(T const * param[]) {}"),
+            " auto fun( foo auto const * param [ ]) {}");
   EXPECT_EQ(apply("template <baz<int> T> auto ^fun(T param) {}"),
             " auto fun( baz <int> auto param) {}");
   EXPECT_EQ(apply("template <foo T, bar U> auto ^fun(T param1, U param2) {}"),
