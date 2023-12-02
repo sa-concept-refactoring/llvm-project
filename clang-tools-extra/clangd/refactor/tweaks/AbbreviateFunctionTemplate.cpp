@@ -88,6 +88,16 @@ auto findDeclaration(const SelectionTree::Node &Root) -> const T * {
   return nullptr;
 }
 
+auto getSpellingForQualifier(tok::TokenKind const &Qualifier) -> const char * {
+  if (const auto *Spelling = getKeywordSpelling(Qualifier))
+    return Spelling;
+
+  if (const auto *Spelling = getPunctuatorSpelling(Qualifier))
+    return Spelling;
+
+  return nullptr;
+}
+
 bool AbbreviateFunctionTemplate::prepare(const Selection &Inputs) {
   const auto *CommonAncestor = Inputs.ASTSelection.commonAncestor();
   if (!CommonAncestor)
@@ -248,30 +258,16 @@ auto AbbreviateFunctionTemplate::generateFunctionParameterReplacement(
 
   ParameterTokens.push_back(AutoKeywordSpelling);
 
-  // TODO: Extract
   for (const auto &Qualifier :
        TemplateParameterInfo.FunctionParameterTypeQualifiers) {
-    const char *Spelling = getKeywordSpelling(Qualifier);
-
-    if (!Spelling)
-      Spelling = getPunctuatorSpelling(Qualifier);
-
-    if (Spelling)
-      ParameterTokens.push_back(Spelling);
+    ParameterTokens.push_back(getSpellingForQualifier(Qualifier));
   }
 
   ParameterTokens.push_back(ParameterName);
 
-  // TODO: Extract
   for (const auto &Qualifier :
        TemplateParameterInfo.FunctionParameterQualifiers) {
-    const char *Spelling = getKeywordSpelling(Qualifier);
-
-    if (!Spelling)
-      Spelling = getPunctuatorSpelling(Qualifier);
-
-    if (Spelling)
-      ParameterTokens.push_back(Spelling);
+    ParameterTokens.push_back(getSpellingForQualifier(Qualifier));
   }
 
   auto FunctionTypeReplacementText = std::accumulate(
