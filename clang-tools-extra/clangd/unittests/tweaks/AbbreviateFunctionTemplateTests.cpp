@@ -52,33 +52,23 @@ TEST_F(AbbreviateFunctionTemplateTest, Test) {
                   "-> void{}"),
             " auto fun( auto ... params) -> void{}");
 
-  // TODO: Check if this causes issues due to the number of tests executed
+  EXPECT_AVAILABLE("temp^l^ate <type^name ^T> au^to fu^n^(^T par^am) {}");
+  EXPECT_AVAILABLE("t^emplat^e <fo^o ^T> aut^o fu^n^(^T ^para^m) -> void {}");
   EXPECT_AVAILABLE(
-      "t^e^m^p^l^a^t^e <^t^y^p^e^n^a^m^e ^T> a^u^t^o f^u^n^(^T p^a^r^a^m^) {}");
-  EXPECT_AVAILABLE(
-      "t^e^m^p^l^a^t^e <f^o^o ^T> a^u^t^o f^u^n^(^T p^a^r^a^m^) -> void {}");
-  EXPECT_AVAILABLE("t^e^m^p^l^a^t^e <f^o^o ^T> a^u^t^o f^u^n^(^T const ** "
-                   "p^a^r^a^m) -> void {}");
-  EXPECT_AVAILABLE("t^e^m^p^l^a^t^e <t^y^p^e^n^a^m^e...ArgTypes> auto "
-                   "f^u^n(^A^rgT^y^p^e^s...^p^a^r^a^m^s^) -> void{}");
+      "^templa^te <f^oo T^> a^uto ^fun(^T co^nst ** para^m) -> void {}");
+  EXPECT_AVAILABLE("templa^te <type^name...ArgTypes> auto"
+                   "fu^n(ArgTy^pes...^para^ms) -> void{}");
 
-  // No possible to click on `const`
   EXPECT_UNAVAILABLE(
-      "template<typename T> auto fun(T c^o^n^s^t param) -> void {}");
+      "templ^ate<typenam^e T> auto f^u^n(list<T> pa^ram) -> void {}");
 
-  // The keyword `auto` can't be used within containers
-  EXPECT_UNAVAILABLE(
-      "template<typename T> auto f^u^n(list<T> param) -> void {}");
-
-  // Template parameters need to be in the same order as function parameters
+  // Template parameters need to be in the same order as the function parameters
   EXPECT_UNAVAILABLE(
       "tem^plate<type^name ^T, typen^ame ^U> auto f^un(^U, ^T) -> void {}");
 
   // Template parameter type can't be used within the function body
-  EXPECT_UNAVAILABLE(R"cpp(
-    templ^ate<cl^ass T, in^t N>
-    aut^o fu^n(T (&^a)[N], i^nt siz^e) -> v^oid {}
-  )cpp");
+  EXPECT_UNAVAILABLE("templ^ate<cl^ass T>"
+                     "aut^o fu^n(T param) -> v^oid { T bar; }");
 }
 
 } // namespace
